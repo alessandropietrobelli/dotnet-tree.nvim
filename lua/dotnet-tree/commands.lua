@@ -141,6 +141,7 @@ function M.select_solution(state)
   end
   if #slns == 1 then
     state.dotnet_sln = slns[1]
+    require("dotnet-tree.store").set(state.path or vim.fn.getcwd(), slns[1])
     require("dotnet-tree").navigate(state)
     return
   end
@@ -149,6 +150,7 @@ function M.select_solution(state)
       return
     end
     state.dotnet_sln = choice
+    require("dotnet-tree.store").set(state.path or vim.fn.getcwd(), choice)
     require("dotnet-tree").navigate(state)
   end)
 end

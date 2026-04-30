@@ -137,7 +137,15 @@ local function build_project_node(proj)
       })
     end
 
-    for _, item in ipairs(walk_dir(csproj.dir)) do
+    local file_items = walk_dir(csproj.dir)
+    for i, it in ipairs(file_items) do
+      if it.path and it.path == proj.path then
+        table.remove(file_items, i)
+        table.insert(file_items, 1, it)
+        break
+      end
+    end
+    for _, item in ipairs(file_items) do
       table.insert(children, item)
     end
   end
@@ -229,7 +237,7 @@ function M.build(sln_path)
     return a.name:lower() < b.name:lower()
   end)
 
-  return {
+  local items = {
     {
       id = "dotnet:sln:" .. sln_path,
       name = sln.name,
@@ -239,6 +247,12 @@ function M.build(sln_path)
       children = roots,
     },
   }
+
+  pcall(function()
+    require("dotnet-tree.git").apply_to_tree(items, sln.dir)
+  end)
+
+  return items
 end
 
 return M

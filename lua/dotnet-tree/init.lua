@@ -28,11 +28,13 @@ M.default_config = {
       { "indent", with_expanders = false },
       { "icon" },
       { "name" },
+      { "git_status" },
     },
     file = {
       { "indent", with_expanders = false },
       { "icon" },
       { "name" },
+      { "git_status" },
     },
   },
 }
@@ -71,7 +73,12 @@ function M.navigate(state, path, path_to_reveal, callback, async)
   state.path = state.path or vim.fn.getcwd()
 
   if not state.dotnet_sln then
-    state.dotnet_sln = find_default_sln(state.path)
+    local persisted = require("dotnet-tree.store").get(state.path)
+    if persisted and vim.fn.filereadable(persisted) == 1 then
+      state.dotnet_sln = persisted
+    else
+      state.dotnet_sln = find_default_sln(state.path)
+    end
   end
 
   if not state.dotnet_sln then
