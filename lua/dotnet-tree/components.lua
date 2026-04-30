@@ -74,7 +74,12 @@ function M.git_status(config, node, state)
     change_sym, change_hl = symbols.untracked, "NeoTreeGitUntracked"
   elseif code == "!!" then
     change_sym, change_hl = symbols.ignored, "NeoTreeGitIgnored"
-  elseif staged == "U" or unstaged == "U" or (staged == "A" and unstaged == "A") or (staged == "D" and unstaged == "D") then
+  elseif
+    staged == "U"
+    or unstaged == "U"
+    or (staged == "A" and unstaged == "A")
+    or (staged == "D" and unstaged == "D")
+  then
     change_sym, change_hl = symbols.conflict, "NeoTreeGitConflict"
   elseif staged == "R" or unstaged == "R" then
     change_sym, change_hl = symbols.renamed, "NeoTreeGitRenamed"
@@ -136,6 +141,91 @@ local function git_name_hl(code)
   return nil
 end
 
+local SEVERITY_HL = {
+  [vim.diagnostic.severity.ERROR] = "DiagnosticError",
+  [vim.diagnostic.severity.WARN] = "DiagnosticWarn",
+  [vim.diagnostic.severity.INFO] = "DiagnosticInfo",
+  [vim.diagnostic.severity.HINT] = "DiagnosticHint",
+}
+
+function M.diagnostics(config, node, state)
+  local kind = node.extra and node.extra.kind
+
+  if kind == "project" then
+    local proj = node.extra.project
+    if not proj or not proj.path then
+      return { text = "" }
+    end
+    local dir = vim.fs.normalize(vim.fn.fnamemodify(proj.path, ":h")) .. "/"
+    local errors, warnings = 0, 0
+    for _, d in ipairs(vim.diagnostic.get(nil) or {}) do
+      if d.bufnr then
+        local bufname = vim.api.nvim_buf_get_name(d.bufnr)
+        if bufname ~= "" then
+          local nbuf = vim.fs.normalize(bufname)
+          if nbuf:sub(1, #dir) == dir then
+            if d.severity == vim.diagnostic.severity.ERROR then
+              errors = errors + 1
+            elseif d.severity == vim.diagnostic.severity.WARN then
+              warnings = warnings + 1
+            end
+          end
+        end
+      end
+    end
+    if errors == 0 and warnings == 0 then
+      return { text = "" }
+    end
+    local parts = {}
+    if errors > 0 then
+      table.insert(parts, { text = "  " .. errors, highlight = "DiagnosticError" })
+    end
+    if warnings > 0 then
+      table.insert(parts, { text = "  " .. warnings, highlight = "DiagnosticWarn" })
+    end
+    return parts
+  end
+
+  if (kind == "file" or kind == nil) and node.path then
+    local present = {}
+    local target = vim.fs.normalize(node.path)
+    for _, d in ipairs(vim.diagnostic.get(nil) or {}) do
+      if d.bufnr and vim.api.nvim_buf_is_valid(d.bufnr) then
+        local bufname = vim.api.nvim_buf_get_name(d.bufnr)
+        if bufname ~= "" then
+          local nbuf = vim.fs.normalize(bufname)
+          if nbuf == target or nbuf:sub(-#target) == target or target:sub(-#nbuf) == nbuf then
+            present[d.severity] = true
+          end
+        end
+      end
+    end
+    if not next(present) then
+      return { text = "" }
+    end
+    local SEV_ICON = {
+      [vim.diagnostic.severity.ERROR] = "",
+      [vim.diagnostic.severity.WARN] = "",
+      [vim.diagnostic.severity.INFO] = "",
+      [vim.diagnostic.severity.HINT] = "",
+    }
+    local parts = {}
+    for _, sev in ipairs({
+      vim.diagnostic.severity.ERROR,
+      vim.diagnostic.severity.WARN,
+      vim.diagnostic.severity.INFO,
+      vim.diagnostic.severity.HINT,
+    }) do
+      if present[sev] then
+        table.insert(parts, { text = " " .. SEV_ICON[sev], highlight = SEVERITY_HL[sev] })
+      end
+    end
+    return parts
+  end
+
+  return { text = "" }
+end
+
 function M.name(config, node, state)
   local kind = node.extra and node.extra.kind
   local hl = "NeoTreeFileName"
@@ -143,7 +233,13 @@ function M.name(config, node, state)
     hl = "NeoTreeRootName"
   elseif kind == "project" or kind == "project_reference" then
     hl = "Function"
-  elseif kind == "sln_folder" or kind == "dependencies" or kind == "projrefs" or kind == "packages" or kind == "frameworks" then
+  elseif
+    kind == "sln_folder"
+    or kind == "dependencies"
+    or kind == "projrefs"
+    or kind == "packages"
+    or kind == "frameworks"
+  then
     hl = "NeoTreeDirectoryName"
   elseif kind == "package" then
     hl = "String"

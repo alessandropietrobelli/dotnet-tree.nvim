@@ -34,12 +34,14 @@ M.default_config = {
       { "indent", with_expanders = false },
       { "icon" },
       { "name" },
+      { "diagnostics" },
       { "git_status" },
     },
     file = {
       { "indent", with_expanders = false },
       { "icon" },
       { "name" },
+      { "diagnostics" },
       { "git_status" },
     },
   },
@@ -55,6 +57,23 @@ end
 
 function M.setup(_, _)
   local group = vim.api.nvim_create_augroup("DotnetTreeAutoRefresh", { clear = true })
+
+  local diag_pending = false
+  vim.api.nvim_create_autocmd("DiagnosticChanged", {
+    group = group,
+    callback = function()
+      if diag_pending then
+        return
+      end
+      diag_pending = true
+      vim.defer_fn(function()
+        diag_pending = false
+        pcall(function()
+          require("neo-tree.sources.manager").refresh("dotnet-tree")
+        end)
+      end, 800)
+    end,
+  })
 
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = group,
