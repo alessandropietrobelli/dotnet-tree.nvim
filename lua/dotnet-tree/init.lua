@@ -58,12 +58,14 @@ function M.setup(_, _)
 
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = group,
-    pattern = { "*.csproj", "*.fsproj", "*.vbproj", "*.sln" },
+    pattern = { "*.csproj", "*.fsproj", "*.vbproj", "*.sln", "Directory.Packages.props" },
     callback = function(args)
       local path = vim.fs.normalize(args.file)
       if path:match("%.sln$") then
         require("dotnet-tree.parser.sln").invalidate(path)
         require("dotnet-tree.parser.csproj").invalidate()
+      elseif path:match("Directory%.Packages%.props$") then
+        require("dotnet-tree.parser.cpm").invalidate(path)
       else
         require("dotnet-tree.parser.csproj").invalidate(path)
       end

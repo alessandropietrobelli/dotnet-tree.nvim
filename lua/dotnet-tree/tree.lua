@@ -1,5 +1,6 @@
 local sln_parser = require("dotnet-tree.parser.sln")
 local csproj_parser = require("dotnet-tree.parser.csproj")
+local cpm_parser = require("dotnet-tree.parser.cpm")
 
 local M = {}
 
@@ -54,7 +55,7 @@ local function walk_dir(dir)
   return items
 end
 
-local function build_project_node(proj)
+local function build_project_node(proj, cpm_versions)
   local children = {}
   local csproj = proj.path and csproj_parser.parse(proj.path) or nil
 
@@ -110,12 +111,23 @@ local function build_project_node(proj)
         return a.name:lower() < b.name:lower()
       end)
       for _, pkg in ipairs(csproj.packages) do
-        local label = pkg.version ~= "" and (pkg.name .. "  " .. pkg.version) or pkg.name
+        local version = pkg.version
+        local from_cpm = false
+        if (not version or version == "") and cpm_versions and cpm_versions[pkg.name] then
+          version = cpm_versions[pkg.name]
+          from_cpm = true
+        end
+        local label
+        if version and version ~= "" then
+          label = pkg.name .. "  " .. version .. (from_cpm and "  ⓒ" or "")
+        else
+          label = pkg.name
+        end
         table.insert(pkg_children, {
           id = "dotnet:pkg:" .. proj.guid .. ":" .. pkg.name,
           name = label,
           type = "file",
-          extra = { kind = "package", package = pkg },
+          extra = { kind = "package", package = { name = pkg.name, version = version, from_cpm = from_cpm } },
         })
       end
       table.insert(deps_children, {
@@ -168,7 +180,7 @@ local function make_solution_item_node(item, owner_guid)
   }
 end
 
-local function build_folder_node(folder, sln)
+local function build_folder_node(folder, sln, cpm_versions)
   local children = {}
   if folder.solution_items then
     for _, item in ipairs(folder.solution_items) do
@@ -180,9 +192,9 @@ local function build_folder_node(folder, sln)
     if child then
       local node
       if child.kind == "folder" then
-        node = build_folder_node(child, sln)
+        node = build_folder_node(child, sln, cpm_versions)
       else
-        node = build_project_node(child)
+        node = build_project_node(child, cpm_versions)
       end
       if node then
         table.insert(children, node)
@@ -212,14 +224,20 @@ function M.build(sln_path)
     return nil, err
   end
 
+  local cpm_versions = nil
+  local cpm_path = cpm_parser.find_props(sln.dir)
+  if cpm_path then
+    cpm_versions = cpm_parser.parse(cpm_path)
+  end
+
   local roots = {}
   for _, proj in ipairs(sln.projects) do
     if not proj.parent_guid then
       local node
       if proj.kind == "folder" then
-        node = build_folder_node(proj, sln)
+        node = build_folder_node(proj, sln, cpm_versions)
       else
-        node = build_project_node(proj)
+        node = build_project_node(proj, cpm_versions)
       end
       if node then
         table.insert(roots, node)
