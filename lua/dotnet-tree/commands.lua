@@ -192,6 +192,85 @@ local function run_in_terminal(cmd)
   vim.cmd("startinsert")
 end
 
+local function add_package(csproj_path)
+  vim.ui.input({ prompt = "Package name (optional @version): " }, function(input)
+    if not input or input == "" then
+      return
+    end
+    local name, version = input:match("^([^@%s]+)@(.+)$")
+    name = name or input
+    local cmd = "dotnet add " .. vim.fn.shellescape(csproj_path) .. " package " .. vim.fn.shellescape(name)
+    if version then
+      cmd = cmd .. " --version " .. vim.fn.shellescape(version)
+    end
+    run_in_terminal(cmd)
+  end)
+end
+
+local function add_reference(state, csproj_path)
+  if not state.dotnet_sln then
+    vim.notify("[dotnet-tree] no solution loaded", vim.log.levels.WARN)
+    return
+  end
+  local sln = require("dotnet-tree.parser.sln").parse(state.dotnet_sln)
+  if not sln then
+    return
+  end
+  local options = {}
+  for _, proj in ipairs(sln.projects) do
+    if proj.path and proj.path ~= csproj_path and proj.kind ~= "folder" then
+      table.insert(options, proj)
+    end
+  end
+  if #options == 0 then
+    vim.notify("[dotnet-tree] no other projects in solution", vim.log.levels.WARN)
+    return
+  end
+  vim.ui.select(options, {
+    prompt = "Select project to reference:",
+    format_item = function(p)
+      return p.name
+    end,
+  }, function(choice)
+    if not choice then
+      return
+    end
+    local cmd = "dotnet add "
+      .. vim.fn.shellescape(csproj_path)
+      .. " reference "
+      .. vim.fn.shellescape(choice.path)
+    run_in_terminal(cmd)
+  end)
+end
+
+function M.add(state)
+  local node = state.tree:get_node()
+  if not node then
+    return
+  end
+  local proj_node = find_project_node(state)
+  if not proj_node or not proj_node.extra.project or not proj_node.extra.project.path then
+    vim.notify("[dotnet-tree] not in a project", vim.log.levels.WARN)
+    return
+  end
+  local csproj_path = proj_node.extra.project.path
+  local kind = node.extra and node.extra.kind
+
+  if kind == "packages" or kind == "package" then
+    add_package(csproj_path)
+  elseif kind == "projrefs" or kind == "project_reference" then
+    add_reference(state, csproj_path)
+  else
+    vim.ui.select({ "package", "reference" }, { prompt = "Add to " .. proj_node.name .. ":" }, function(choice)
+      if choice == "package" then
+        add_package(csproj_path)
+      elseif choice == "reference" then
+        add_reference(state, csproj_path)
+      end
+    end)
+  end
+end
+
 function M.edit_project_file(state)
   local node = find_project_node(state)
   if not node or not node.extra.project or not node.extra.project.path then
