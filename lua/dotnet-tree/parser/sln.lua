@@ -41,8 +41,8 @@ function M.parse(sln_path)
   local projects = {}
   local by_guid = {}
 
-  for type_guid, name, rel_path, guid in content:gmatch(
-    'Project%("{([^}]+)}"%)%s*=%s*"([^"]+)",%s*"([^"]+)",%s*"{([^}]+)}"'
+  for type_guid, name, rel_path, guid, body in content:gmatch(
+    'Project%("{([^}]+)}"%)%s*=%s*"([^"]+)",%s*"([^"]+)",%s*"{([^}]+)}"(.-)\nEndProject\r?\n'
   ) do
     type_guid = type_guid:upper()
     guid = guid:upper()
@@ -51,6 +51,19 @@ function M.parse(sln_path)
     if kind ~= "folder" then
       abs_path = vim.fs.normalize(sln_dir .. "/" .. rel_path:gsub("\\", "/"))
     end
+
+    local solution_items = {}
+    local items_section = body:match("ProjectSection%(SolutionItems%)%s*=%s*preProject(.-)EndProjectSection")
+    if items_section then
+      for line in items_section:gmatch("[^\r\n]+") do
+        local rel = line:match("^%s*(.-)%s*=")
+        if rel and rel ~= "" then
+          local abs = vim.fs.normalize(sln_dir .. "/" .. rel:gsub("\\", "/"))
+          table.insert(solution_items, { rel = rel, path = abs })
+        end
+      end
+    end
+
     local proj = {
       guid = guid,
       type_guid = type_guid,
@@ -59,6 +72,7 @@ function M.parse(sln_path)
       kind = kind,
       parent_guid = nil,
       children_guids = {},
+      solution_items = solution_items,
     }
     table.insert(projects, proj)
     by_guid[guid] = proj

@@ -152,8 +152,23 @@ local function build_project_node(proj)
   }
 end
 
+local function make_solution_item_node(item, owner_guid)
+  return {
+    id = "dotnet:slnitem:" .. owner_guid .. ":" .. item.path,
+    name = vim.fn.fnamemodify(item.path, ":t"),
+    type = "file",
+    path = item.path,
+    extra = { kind = "file" },
+  }
+end
+
 local function build_folder_node(folder, sln)
   local children = {}
+  if folder.solution_items then
+    for _, item in ipairs(folder.solution_items) do
+      table.insert(children, make_solution_item_node(item, folder.guid))
+    end
+  end
   for _, child_guid in ipairs(folder.children_guids) do
     local child = sln.by_guid[child_guid]
     if child then
@@ -168,10 +183,11 @@ local function build_folder_node(folder, sln)
       end
     end
   end
+  local order = { sln_folder = 1, project = 2, file = 3 }
   table.sort(children, function(a, b)
-    local ak, bk = a.extra.kind, b.extra.kind
-    if ak ~= bk then
-      return ak == "sln_folder"
+    local ao, bo = order[a.extra.kind] or 9, order[b.extra.kind] or 9
+    if ao ~= bo then
+      return ao < bo
     end
     return a.name:lower() < b.name:lower()
   end)
