@@ -271,6 +271,94 @@ function M.add(state)
   end
 end
 
+local TEMPLATES = {
+  class = "namespace %s;\n\npublic class %s\n{\n}\n",
+  interface = "namespace %s;\n\npublic interface %s\n{\n}\n",
+  record = "namespace %s;\n\npublic record %s();\n",
+  struct = "namespace %s;\n\npublic struct %s\n{\n}\n",
+  enum = "namespace %s;\n\npublic enum %s\n{\n}\n",
+}
+
+local function compute_target_dir(state, proj_node)
+  local node = state.tree:get_node()
+  if node then
+    local kind = node.extra and node.extra.kind
+    if kind == "folder" and node.path then
+      return node.path
+    elseif kind == "file" and node.path then
+      return vim.fn.fnamemodify(node.path, ":h")
+    end
+  end
+  if proj_node.extra and proj_node.extra.project and proj_node.extra.project.path then
+    return vim.fn.fnamemodify(proj_node.extra.project.path, ":h")
+  end
+end
+
+local function compute_namespace(target_dir, proj_path)
+  local proj_dir = vim.fs.normalize(vim.fn.fnamemodify(proj_path, ":h"))
+  local root_ns = vim.fn.fnamemodify(proj_path, ":t:r")
+  local target = vim.fs.normalize(target_dir)
+  local rel = target:sub(#proj_dir + 1):gsub("^/", "")
+  if rel == "" then
+    return root_ns
+  end
+  local parts = { root_ns }
+  for part in rel:gmatch("[^/]+") do
+    table.insert(parts, part)
+  end
+  return table.concat(parts, ".")
+end
+
+function M.new_file(state)
+  local proj_node = find_project_node(state)
+  if not proj_node or not proj_node.extra.project or not proj_node.extra.project.path then
+    vim.notify("[dotnet-tree] not in a project", vim.log.levels.WARN)
+    return
+  end
+  local target_dir = compute_target_dir(state, proj_node)
+  if not target_dir then
+    return
+  end
+
+  local types = { "class", "interface", "record", "struct", "enum" }
+  vim.ui.select(types, { prompt = "Type:" }, function(typ)
+    if not typ then
+      return
+    end
+    vim.ui.input({ prompt = typ .. " name: " }, function(input)
+      if not input or input == "" then
+        return
+      end
+      local name = input:gsub("%.cs$", "")
+      if typ == "interface" and not name:match("^I[%u]") then
+        name = "I" .. name
+      end
+      local ns = compute_namespace(target_dir, proj_node.extra.project.path)
+      local content = string.format(TEMPLATES[typ], ns, name)
+      local target_path = target_dir .. "/" .. name .. ".cs"
+
+      if vim.fn.filereadable(target_path) == 1 then
+        vim.notify("[dotnet-tree] already exists: " .. target_path, vim.log.levels.WARN)
+        return
+      end
+
+      vim.fn.mkdir(target_dir, "p")
+      local lines = {}
+      for line in (content .. "\n"):gmatch("([^\n]*)\n") do
+        table.insert(lines, line)
+      end
+      if lines[#lines] == "" then
+        table.remove(lines)
+      end
+      vim.fn.writefile(lines, target_path)
+      vim.cmd("edit " .. vim.fn.fnameescape(target_path))
+      pcall(function()
+        require("neo-tree.sources.manager").refresh("dotnet-tree")
+      end)
+    end)
+  end)
+end
+
 function M.edit_project_file(state)
   local node = find_project_node(state)
   if not node or not node.extra.project or not node.extra.project.path then

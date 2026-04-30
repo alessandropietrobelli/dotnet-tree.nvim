@@ -19,6 +19,7 @@ M.default_config = {
       ["s"] = { "select_solution", desc = "[.NET] select solution" },
       ["e"] = { "edit_project_file", desc = "[.NET] edit .csproj" },
       ["a"] = { "add", desc = "[.NET] add package/reference" },
+      ["n"] = { "new_file", desc = "[.NET] new file from template" },
       ["b"] = { "build", desc = "[.NET] build project" },
       ["B"] = { "build_solution", desc = "[.NET] build solution" },
       ["c"] = { "clean", desc = "[.NET] clean project" },
