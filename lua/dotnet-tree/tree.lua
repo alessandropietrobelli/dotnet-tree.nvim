@@ -138,11 +138,9 @@ local function build_project_node(proj)
     end
 
     local file_items = walk_dir(csproj.dir)
-    for i, it in ipairs(file_items) do
-      if it.path and it.path == proj.path then
+    for i = #file_items, 1, -1 do
+      if file_items[i].path == proj.path then
         table.remove(file_items, i)
-        table.insert(file_items, 1, it)
-        break
       end
     end
     for _, item in ipairs(file_items) do

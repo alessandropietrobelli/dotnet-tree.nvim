@@ -17,6 +17,7 @@ M.default_config = {
       ["Z"] = { "expand_all_nodes", desc = "expand all" },
       ["?"] = { "show_help", desc = "show help" },
       ["s"] = { "select_solution", desc = "[.NET] select solution" },
+      ["e"] = { "edit_project_file", desc = "[.NET] edit .csproj" },
       ["b"] = { "build", desc = "[.NET] build project" },
       ["B"] = { "build_solution", desc = "[.NET] build solution" },
       ["r"] = { "run_project", desc = "[.NET] run project" },

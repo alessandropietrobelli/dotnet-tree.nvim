@@ -192,6 +192,15 @@ local function run_in_terminal(cmd)
   vim.cmd("startinsert")
 end
 
+function M.edit_project_file(state)
+  local node = find_project_node(state)
+  if not node or not node.extra.project or not node.extra.project.path then
+    vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
+    return
+  end
+  vim.cmd("edit " .. vim.fn.fnameescape(node.extra.project.path))
+end
+
 function M.build(state)
   local node = find_project_node(state)
   if not node then
