@@ -20,6 +20,8 @@ M.default_config = {
       ["e"] = { "edit_project_file", desc = "[.NET] edit .csproj" },
       ["b"] = { "build", desc = "[.NET] build project" },
       ["B"] = { "build_solution", desc = "[.NET] build solution" },
+      ["c"] = { "clean", desc = "[.NET] clean project" },
+      ["C"] = { "clean_solution", desc = "[.NET] clean solution" },
       ["r"] = { "run_project", desc = "[.NET] run project" },
       ["t"] = { "test", desc = "[.NET] test project" },
     },

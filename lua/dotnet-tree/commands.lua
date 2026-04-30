@@ -227,6 +227,23 @@ function M.build_solution(state)
   run_in_terminal("dotnet build " .. vim.fn.shellescape(state.dotnet_sln))
 end
 
+function M.clean(state)
+  local node = find_project_node(state)
+  if not node then
+    vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
+    return
+  end
+  run_in_terminal("dotnet clean " .. vim.fn.shellescape(node.extra.project.path))
+end
+
+function M.clean_solution(state)
+  if not state.dotnet_sln then
+    vim.notify("[dotnet-tree] no solution loaded", vim.log.levels.WARN)
+    return
+  end
+  run_in_terminal("dotnet clean " .. vim.fn.shellescape(state.dotnet_sln))
+end
+
 function M.test(state)
   local node = find_project_node(state)
   if not node then
