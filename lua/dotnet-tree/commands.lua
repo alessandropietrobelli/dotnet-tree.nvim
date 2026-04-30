@@ -420,4 +420,18 @@ function M.test(state)
   run_in_terminal("dotnet test " .. vim.fn.shellescape(node.extra.project.path))
 end
 
+function M.watch(state)
+  local node = find_project_node(state)
+  if not node then
+    vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
+    return
+  end
+  vim.ui.select({ "run", "test", "build" }, { prompt = "dotnet watch:" }, function(choice)
+    if not choice then
+      return
+    end
+    run_in_terminal("dotnet watch " .. choice .. " --project " .. vim.fn.shellescape(node.extra.project.path))
+  end)
+end
+
 return M

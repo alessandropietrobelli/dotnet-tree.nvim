@@ -26,6 +26,7 @@ M.default_config = {
       ["C"] = { "clean_solution", desc = "[.NET] clean solution" },
       ["r"] = { "run_project", desc = "[.NET] run project" },
       ["t"] = { "test", desc = "[.NET] test project" },
+      ["w"] = { "watch", desc = "[.NET] watch run/test/build" },
     },
   },
   renderers = {
