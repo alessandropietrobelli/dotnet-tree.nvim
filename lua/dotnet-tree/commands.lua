@@ -16,6 +16,89 @@ local NON_OPENABLE = {
   solution = true,
 }
 
+function M.show_help(state)
+  local mappings = state.window and state.window.mappings or {}
+  local dotnet, other = {}, {}
+
+  for key, val in pairs(mappings) do
+    local cmd, desc
+    if type(val) == "table" then
+      cmd, desc = val[1], val.desc
+    elseif type(val) == "string" then
+      cmd, desc = val, val
+    elseif type(val) == "function" then
+      cmd, desc = "<lua>", "<lua function>"
+    end
+    if cmd and cmd ~= "noop" and cmd ~= "none" then
+      desc = desc or cmd
+      local label = desc:match("^%[%.NET%]%s*(.+)$")
+      if label then
+        table.insert(dotnet, { key = key, desc = label })
+      else
+        table.insert(other, { key = key, desc = desc })
+      end
+    end
+  end
+
+  local function sort(t)
+    table.sort(t, function(a, b)
+      return a.key:lower() < b.key:lower()
+    end)
+  end
+  sort(dotnet)
+  sort(other)
+
+  local lines = {}
+  local function add_section(title, items)
+    if #items == 0 then
+      return
+    end
+    table.insert(lines, title)
+    for _, m in ipairs(items) do
+      table.insert(lines, string.format("  %-16s %s", m.key, m.desc))
+    end
+    table.insert(lines, "")
+  end
+
+  add_section("─── .NET ───", dotnet)
+  add_section("─── Navigation ───", other)
+  if lines[#lines] == "" then
+    table.remove(lines)
+  end
+
+  local width = 0
+  for _, l in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(l))
+  end
+  width = math.max(width + 2, 36)
+  local height = #lines
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].bufhidden = "wipe"
+
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor((vim.o.columns - width) / 2),
+    style = "minimal",
+    border = "rounded",
+    title = " dotnet-tree help ",
+    title_pos = "center",
+  })
+
+  local function close()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  vim.keymap.set("n", "q", close, { buffer = buf, nowait = true, silent = true })
+  vim.keymap.set("n", "<esc>", close, { buffer = buf, nowait = true, silent = true })
+end
+
 function M.refresh(state)
   require("dotnet-tree").navigate(state)
 end
