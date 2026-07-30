@@ -148,6 +148,108 @@ local SEVERITY_HL = {
   [vim.diagnostic.severity.HINT] = "DiagnosticHint",
 }
 
+-- Diagnostics index.
+--
+-- neo-tree calls the components once per rendered line, and this renderer used
+-- to walk `vim.diagnostic.get(nil)` on every one of those calls, which makes the
+-- cost of a redraw the product of visible lines and active diagnostics. The
+-- index below collapses that to one pass per change: it is rebuilt lazily on
+-- first use and invalidated by `DiagnosticChanged`, so it can never serve a
+-- stale answer -- that autocmd fires exactly when the underlying data moves.
+-- `BufFilePost` is included because renaming a buffer changes the path a
+-- diagnostic maps to without changing the diagnostics themselves.
+local diag_index = nil
+
+local function invalidate_diag_index()
+  diag_index = nil
+end
+
+vim.api.nvim_create_autocmd({ "DiagnosticChanged", "BufFilePost" }, {
+  group = vim.api.nvim_create_augroup("DotnetTreeDiagnosticsIndex", { clear = true }),
+  callback = invalidate_diag_index,
+})
+
+local function build_diag_index()
+  local idx = { by_path = {}, by_base = {}, entries = {}, by_dir = {} }
+  for _, d in ipairs(vim.diagnostic.get(nil) or {}) do
+    if d.bufnr and vim.api.nvim_buf_is_valid(d.bufnr) then
+      local bufname = vim.api.nvim_buf_get_name(d.bufnr)
+      if bufname ~= "" then
+        local path = vim.fs.normalize(bufname)
+        local entry = idx.by_path[path]
+        if not entry then
+          entry = { path = path, errors = 0, warnings = 0, severities = {} }
+          idx.by_path[path] = entry
+          table.insert(idx.entries, entry)
+          local base = path:match("([^/]+)$")
+          if base then
+            idx.by_base[base] = idx.by_base[base] or {}
+            table.insert(idx.by_base[base], entry)
+          end
+        end
+        entry.severities[d.severity] = true
+        if d.severity == vim.diagnostic.severity.ERROR then
+          entry.errors = entry.errors + 1
+        elseif d.severity == vim.diagnostic.severity.WARN then
+          entry.warnings = entry.warnings + 1
+        end
+      end
+    end
+  end
+  return idx
+end
+
+local function get_diag_index()
+  if not diag_index then
+    diag_index = build_diag_index()
+  end
+  return diag_index
+end
+
+-- Errors/warnings under a project directory. Memoised per directory for the
+-- lifetime of the index, so a project row costs one scan per refresh, not one
+-- per redraw.
+local function counts_under_dir(idx, dir)
+  local cached = idx.by_dir[dir]
+  if cached then
+    return cached.errors, cached.warnings
+  end
+  local errors, warnings = 0, 0
+  for _, entry in ipairs(idx.entries) do
+    if entry.path:sub(1, #dir) == dir then
+      errors = errors + entry.errors
+      warnings = warnings + entry.warnings
+    end
+  end
+  idx.by_dir[dir] = { errors = errors, warnings = warnings }
+  return errors, warnings
+end
+
+-- Severities present on a single file. Exact path first; on a miss, fall back
+-- to the original suffix-tolerant comparison, but only against entries that
+-- share a basename rather than against every diagnostic in the session.
+local function severities_for_path(idx, path)
+  local target = vim.fs.normalize(path)
+  local exact = idx.by_path[target]
+  if exact then
+    return exact.severities
+  end
+  local base = target:match("([^/]+)$")
+  if not base then
+    return nil
+  end
+  local present = nil
+  for _, entry in ipairs(idx.by_base[base] or {}) do
+    if entry.path:sub(-#target) == target or target:sub(-#entry.path) == entry.path then
+      present = present or {}
+      for sev in pairs(entry.severities) do
+        present[sev] = true
+      end
+    end
+  end
+  return present
+end
+
 function M.diagnostics(config, node, state)
   local kind = node.extra and node.extra.kind
 
@@ -157,22 +259,7 @@ function M.diagnostics(config, node, state)
       return { text = "" }
     end
     local dir = vim.fs.normalize(vim.fn.fnamemodify(proj.path, ":h")) .. "/"
-    local errors, warnings = 0, 0
-    for _, d in ipairs(vim.diagnostic.get(nil) or {}) do
-      if d.bufnr then
-        local bufname = vim.api.nvim_buf_get_name(d.bufnr)
-        if bufname ~= "" then
-          local nbuf = vim.fs.normalize(bufname)
-          if nbuf:sub(1, #dir) == dir then
-            if d.severity == vim.diagnostic.severity.ERROR then
-              errors = errors + 1
-            elseif d.severity == vim.diagnostic.severity.WARN then
-              warnings = warnings + 1
-            end
-          end
-        end
-      end
-    end
+    local errors, warnings = counts_under_dir(get_diag_index(), dir)
     if errors == 0 and warnings == 0 then
       return { text = "" }
     end
@@ -187,20 +274,8 @@ function M.diagnostics(config, node, state)
   end
 
   if (kind == "file" or kind == nil) and node.path then
-    local present = {}
-    local target = vim.fs.normalize(node.path)
-    for _, d in ipairs(vim.diagnostic.get(nil) or {}) do
-      if d.bufnr and vim.api.nvim_buf_is_valid(d.bufnr) then
-        local bufname = vim.api.nvim_buf_get_name(d.bufnr)
-        if bufname ~= "" then
-          local nbuf = vim.fs.normalize(bufname)
-          if nbuf == target or nbuf:sub(-#target) == target or target:sub(-#nbuf) == nbuf then
-            present[d.severity] = true
-          end
-        end
-      end
-    end
-    if not next(present) then
+    local present = severities_for_path(get_diag_index(), node.path)
+    if not present or not next(present) then
       return { text = "" }
     end
     local SEV_ICON = {
