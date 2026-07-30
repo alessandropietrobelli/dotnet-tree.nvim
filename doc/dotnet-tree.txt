@@ -1,0 +1,135 @@
+*dotnet-tree.txt*   A .NET solution explorer for Neovim, as a neo-tree source
+
+==============================================================================
+CONTENTS                                                     *dotnet-tree*
+
+  1. Introduction ............................ |dotnet-tree-introduction|
+  2. Requirements ............................ |dotnet-tree-requirements|
+  3. Installation ............................ |dotnet-tree-installation|
+  4. Usage ................................... |dotnet-tree-usage|
+  5. Mappings ................................ |dotnet-tree-mappings|
+  6. Configuration ........................... |dotnet-tree-configuration|
+  7. Health .................................. |dotnet-tree-health|
+  8. Troubleshooting ......................... |dotnet-tree-troubleshooting|
+
+==============================================================================
+1. INTRODUCTION                                 *dotnet-tree-introduction*
+
+dotnet-tree renders a .NET solution the way the solution declares itself —
+solution folders, projects, project references, package references — rather
+than the way files sit on disk. It supports both the legacy `.sln` format and
+the newer XML `.slnx` format, resolves package versions through Central
+Package Management (`Directory.Packages.props`), and runs `dotnet` CLI actions
+on the node under the cursor.
+
+It is implemented as a custom source for neo-tree.nvim, not as a standalone
+tree plugin. See |dotnet-tree-installation|.
+
+==============================================================================
+2. REQUIREMENTS                                 *dotnet-tree-requirements*
+
+  - Neovim >= 0.9
+  - neo-tree.nvim              https://github.com/nvim-neo-tree/neo-tree.nvim
+  - the `dotnet` CLI on $PATH, for the build/run/test/watch/add actions only
+
+==============================================================================
+3. INSTALLATION                                 *dotnet-tree-installation*
+
+Installing the plugin is NOT sufficient. neo-tree resolves external sources by
+calling `require()` on the source name, so "dotnet-tree" must appear in
+neo-tree's `sources` list: >lua
+
+    {
+      "nvim-neo-tree/neo-tree.nvim",
+      dependencies = {
+        "nvim-lua/plenary.nvim",
+        "MunifTanjim/nui.nvim",
+        "nvim-tree/nvim-web-devicons",
+        "alessandropietrobelli/dotnet-tree.nvim",
+      },
+      opts = {
+        sources = { "filesystem", "buffers", "git_status", "dotnet-tree" },
+      },
+    }
+<
+==============================================================================
+4. USAGE                                               *dotnet-tree-usage*
+
+                                                            *:Neotree-dotnet*
+Open the tree: >
+    :Neotree dotnet-tree reveal
+<
+The source looks for a solution under the current working directory. When a
+repository contains more than one, press `s` to choose; the choice is
+persisted per working directory in: >
+    stdpath("state")/dotnet-tree/solutions.json
+<
+The tree refreshes automatically on |DiagnosticChanged| and after writing
+`*.csproj`, `*.fsproj`, `*.vbproj`, `*.sln`, `*.slnx` or
+`Directory.Packages.props`.
+
+==============================================================================
+5. MAPPINGS                                         *dotnet-tree-mappings*
+
+Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
+
+  <cr>, o, 2-LeftMouse   open node
+  <space>                toggle node
+  R                      refresh tree
+  z                      close all nodes
+  Z                      expand all nodes
+  ?                      show help
+  s                      select solution
+  e                      edit the project's .csproj
+  a                      add package or project reference
+  n                      new file from template
+  b                      build project
+  B                      build solution
+  c                      clean project
+  C                      clean solution
+  r                      run project
+  t                      test project
+  w                      watch (run / test / build)
+
+==============================================================================
+6. CONFIGURATION                               *dotnet-tree-configuration*
+
+Configure it as a neo-tree source. The table is merged over
+`require("dotnet-tree").default_config`: >lua
+
+    opts = {
+      sources = { "filesystem", "dotnet-tree" },
+      ["dotnet-tree"] = {
+        window = {
+          position = "left",
+          width = 40,
+          mappings = {
+            ["<2-LeftMouse>"] = "noop",
+          },
+        },
+      },
+    }
+<
+==============================================================================
+7. HEALTH                                             *dotnet-tree-health*
+
+                                                    *:checkhealth-dotnet-tree*
+>
+    :checkhealth dotnet-tree
+<
+Verifies the Neovim version, that neo-tree is installed, that "dotnet-tree" is
+registered in neo-tree's sources, that `dotnet` is executable, and which
+solutions are discoverable from the current working directory.
+
+==============================================================================
+8. TROUBLESHOOTING                           *dotnet-tree-troubleshooting*
+
+"Source dotnet-tree not found"
+    "dotnet-tree" is missing from neo-tree's `sources`.
+    See |dotnet-tree-installation|.
+
+"[dotnet-tree] no .sln/.slnx found under <path>"
+    No solution below the current working directory. Start Neovim at the
+    repository root, or press `s` to select one explicitly.
+
+vim:tw=78:ts=8:noet:ft=help:norl:

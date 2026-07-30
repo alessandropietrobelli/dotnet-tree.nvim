@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  stylua:
+    name: stylua
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check lua/
+
+  luacheck:
+    name: luacheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 luarocks
+          sudo luarocks install luacheck
+      - run: luacheck lua/
+
+  load:
+    name: load (${{ matrix.neovim }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim: [stable, nightly]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+      # commands.lua and components.lua require neo-tree at module level,
+      # so the dependencies have to be on the runtimepath to load them.
+      - name: Fetch dependencies
+        run: |
+          mkdir -p deps
+          git clone --depth 1 https://github.com/nvim-lua/plenary.nvim deps/plenary.nvim
+          git clone --depth 1 https://github.com/MunifTanjim/nui.nvim deps/nui.nvim
+          git clone --depth 1 https://github.com/nvim-neo-tree/neo-tree.nvim deps/neo-tree.nvim
+
+      - name: Require every module
+        run: |
+          nvim --headless -u NONE \
+            --cmd "set runtimepath+=$GITHUB_WORKSPACE" \
+            --cmd "set runtimepath+=$GITHUB_WORKSPACE/deps/plenary.nvim" \
+            --cmd "set runtimepath+=$GITHUB_WORKSPACE/deps/nui.nvim" \
+            --cmd "set runtimepath+=$GITHUB_WORKSPACE/deps/neo-tree.nvim" \
+            -c "lua for _, m in ipairs({
+                  'dotnet-tree',
+                  'dotnet-tree.health',
+                  'dotnet-tree.store',
+                  'dotnet-tree.git',
+                  'dotnet-tree.tree',
+                  'dotnet-tree.commands',
+                  'dotnet-tree.components',
+                  'dotnet-tree.parser.solution',
+                  'dotnet-tree.parser.sln',
+                  'dotnet-tree.parser.slnx',
+                  'dotnet-tree.parser.csproj',
+                  'dotnet-tree.parser.cpm',
+                }) do require(m) end print('all modules loaded')" \
+            -c "qa!"
+
+  docs:
+    name: vimdoc tags
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Generate helptags
+        run: nvim --headless -u NONE -c "helptags doc/" -c "qa!"

@@ -1,0 +1,79 @@
+name: Bug report
+description: Something renders wrong, errors out, or does not appear
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: if the `dotnet-tree` source does not appear at all, run
+        `:checkhealth dotnet-tree`. It is almost always `"dotnet-tree"` missing
+        from neo-tree's `opts.sources`.
+
+  - type: textarea
+    id: checkhealth
+    attributes:
+      label: ":checkhealth dotnet-tree output"
+      description: Paste the full output.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Neovim at the root of a solution with ...
+        2. :Neotree dotnet-tree reveal
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: nvim
+    attributes:
+      label: Neovim version
+      placeholder: "nvim --version | head -1"
+    validations:
+      required: true
+
+  - type: input
+    id: neotree
+    attributes:
+      label: neo-tree.nvim version
+      placeholder: commit sha or tag
+    validations:
+      required: true
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Solution format
+      options:
+        - .sln
+        - .slnx
+        - both / not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: cpm
+    attributes:
+      label: Central Package Management
+      options:
+        - label: The repository has a `Directory.Packages.props`
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solution file (optional but very helpful)
+      description: A sanitised `.sln`/`.slnx` that reproduces the problem.
+      render: xml
