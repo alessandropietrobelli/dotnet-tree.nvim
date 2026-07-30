@@ -41,9 +41,9 @@ function M.parse(sln_path)
   local projects = {}
   local by_guid = {}
 
-  for type_guid, name, rel_path, guid, body in content:gmatch(
-    'Project%("{([^}]+)}"%)%s*=%s*"([^"]+)",%s*"([^"]+)",%s*"{([^}]+)}"(.-)\nEndProject\r?\n'
-  ) do
+  for type_guid, name, rel_path, guid, body in
+    content:gmatch('Project%("{([^}]+)}"%)%s*=%s*"([^"]+)",%s*"([^"]+)",%s*"{([^}]+)}"(.-)\nEndProject\r?\n')
+  do
     type_guid = type_guid:upper()
     guid = guid:upper()
     local kind = PROJECT_TYPES[type_guid] or "unknown"

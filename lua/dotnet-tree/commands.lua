@@ -232,10 +232,7 @@ local function add_reference(state, csproj_path)
     if not choice then
       return
     end
-    local cmd = "dotnet add "
-      .. vim.fn.shellescape(csproj_path)
-      .. " reference "
-      .. vim.fn.shellescape(choice.path)
+    local cmd = "dotnet add " .. vim.fn.shellescape(csproj_path) .. " reference " .. vim.fn.shellescape(choice.path)
     run_in_terminal(cmd)
   end)
 end
