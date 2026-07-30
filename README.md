@@ -24,7 +24,10 @@ This source renders that graph.
 - **Solution folders** rendered as real nodes, nested as declared
 - **Projects** with their `.csproj` pinned on top, package references and project references
 - **Central Package Management** — resolves versions from `Directory.Packages.props`
-- **LSP diagnostics** and **git status** propagated onto tree nodes
+- **LSP diagnostics** and **git status** propagated onto tree nodes — with a language server
+  configured for background analysis over the whole solution (for example roslyn.nvim's
+  `dotnet_analyzer_diagnostics_scope = "fullSolution"`), markers appear on files you have not
+  opened, and project rows carry the error and warning counts underneath them
 - **dotnet CLI actions** on the node under the cursor: build, clean, run, test, watch, add
   package / project reference, new file from template (with namespace inferred from the folder)
 - **Multiple solutions** — pick one with `s`; the choice is remembered per working directory
@@ -151,6 +154,12 @@ callout in [Installation](#installation).
 
 **`no .sln/.slnx found under <path>`** — the source looks for a solution under the current working
 directory. Open Neovim at the repository root, or press `s` to pick one explicitly.
+
+**Only one file in the whole tree shows a diagnostic marker** — the solution has not been restored,
+so the language server cannot load the project graph and only reports on the file you have open.
+Run `dotnet restore` and give the server time to finish indexing; on a solution of a few dozen
+projects that took a couple of minutes here, and the count climbs in steps rather than appearing
+all at once.
 
 ## Contributing
 
