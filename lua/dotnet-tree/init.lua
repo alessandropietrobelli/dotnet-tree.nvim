@@ -48,11 +48,17 @@ M.default_config = {
 }
 
 local function find_default_sln(cwd)
-  local results = vim.fn.globpath(cwd, "*.sln", false, true)
-  if #results == 0 then
-    results = vim.fn.globpath(cwd, "**/*.sln", false, true)
+  return require("dotnet-tree.parser.solution").find(cwd)[1]
+end
+
+local function refresh_preserve_focus()
+  local prev_win = vim.api.nvim_get_current_win()
+  pcall(function()
+    require("neo-tree.sources.manager").refresh("dotnet-tree")
+  end)
+  if vim.api.nvim_win_is_valid(prev_win) then
+    pcall(vim.api.nvim_set_current_win, prev_win)
   end
-  return results[1]
 end
 
 function M.setup(_, _)
@@ -68,29 +74,25 @@ function M.setup(_, _)
       diag_pending = true
       vim.defer_fn(function()
         diag_pending = false
-        pcall(function()
-          require("neo-tree.sources.manager").refresh("dotnet-tree")
-        end)
+        refresh_preserve_focus()
       end, 800)
     end,
   })
 
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = group,
-    pattern = { "*.csproj", "*.fsproj", "*.vbproj", "*.sln", "Directory.Packages.props" },
+    pattern = { "*.csproj", "*.fsproj", "*.vbproj", "*.sln", "*.slnx", "Directory.Packages.props" },
     callback = function(args)
       local path = vim.fs.normalize(args.file)
-      if path:match("%.sln$") then
-        require("dotnet-tree.parser.sln").invalidate(path)
+      if path:match("%.slnx?$") then
+        require("dotnet-tree.parser.solution").invalidate(path)
         require("dotnet-tree.parser.csproj").invalidate()
       elseif path:match("Directory%.Packages%.props$") then
         require("dotnet-tree.parser.cpm").invalidate(path)
       else
         require("dotnet-tree.parser.csproj").invalidate(path)
       end
-      pcall(function()
-        require("neo-tree.sources.manager").refresh("dotnet-tree")
-      end)
+      refresh_preserve_focus()
     end,
   })
 end
@@ -109,7 +111,7 @@ function M.navigate(state, path, path_to_reveal, callback, async)
   end
 
   if not state.dotnet_sln then
-    vim.notify("[dotnet-tree] no .sln found under " .. state.path, vim.log.levels.WARN)
+    vim.notify("[dotnet-tree] no .sln/.slnx found under " .. state.path, vim.log.levels.WARN)
     renderer.show_nodes({}, state)
     if callback then
       callback()
@@ -130,12 +132,6 @@ function M.navigate(state, path, path_to_reveal, callback, async)
 
   renderer.show_nodes(items, state)
 
-  if not path_to_reveal then
-    local bufname = vim.api.nvim_buf_get_name(0)
-    if bufname ~= "" and vim.fn.filereadable(bufname) == 1 then
-      path_to_reveal = vim.fs.normalize(bufname)
-    end
-  end
   if path_to_reveal then
     pcall(renderer.focus_node, state, path_to_reveal)
   end

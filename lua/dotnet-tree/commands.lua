@@ -131,12 +131,9 @@ end
 
 function M.select_solution(state)
   local cwd = state.path or vim.fn.getcwd()
-  local slns = vim.fn.globpath(cwd, "*.sln", false, true)
+  local slns = require("dotnet-tree.parser.solution").find(cwd)
   if #slns == 0 then
-    slns = vim.fn.globpath(cwd, "**/*.sln", false, true)
-  end
-  if #slns == 0 then
-    vim.notify("[dotnet-tree] no .sln found", vim.log.levels.WARN)
+    vim.notify("[dotnet-tree] no .sln/.slnx found", vim.log.levels.WARN)
     return
   end
   if #slns == 1 then
@@ -212,7 +209,7 @@ local function add_reference(state, csproj_path)
     vim.notify("[dotnet-tree] no solution loaded", vim.log.levels.WARN)
     return
   end
-  local sln = require("dotnet-tree.parser.sln").parse(state.dotnet_sln)
+  local sln = require("dotnet-tree.parser.solution").parse(state.dotnet_sln)
   if not sln then
     return
   end

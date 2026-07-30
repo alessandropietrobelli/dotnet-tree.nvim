@@ -1,4 +1,4 @@
-local sln_parser = require("dotnet-tree.parser.sln")
+local sln_parser = require("dotnet-tree.parser.solution")
 local csproj_parser = require("dotnet-tree.parser.csproj")
 local cpm_parser = require("dotnet-tree.parser.cpm")
 
@@ -6,7 +6,7 @@ local M = {}
 
 local IGNORED_DIRS = { bin = true, obj = true, [".vs"] = true, [".git"] = true, node_modules = true }
 
-local function walk_dir(dir)
+local function walk_dir(dir, id_prefix)
   local items = {}
   local handle = vim.uv.fs_scandir(dir)
   if not handle then
@@ -35,16 +35,16 @@ local function walk_dir(dir)
     local path = dir .. "/" .. e.name
     if e.type == "directory" then
       table.insert(items, {
-        id = "dotnet:dir:" .. path,
+        id = id_prefix .. ":dir:" .. path,
         name = e.name,
         type = "directory",
         path = path,
         extra = { kind = "folder" },
-        children = walk_dir(path),
+        children = walk_dir(path, id_prefix),
       })
     else
       table.insert(items, {
-        id = path,
+        id = id_prefix .. ":file:" .. path,
         name = e.name,
         type = "file",
         path = path,
@@ -149,7 +149,7 @@ local function build_project_node(proj, cpm_versions)
       })
     end
 
-    local file_items = walk_dir(csproj.dir)
+    local file_items = walk_dir(csproj.dir, "dotnet:proj:" .. proj.guid)
     for i = #file_items, 1, -1 do
       if file_items[i].path == proj.path then
         table.remove(file_items, i)
