@@ -1,0 +1,4 @@
+# Real .sln files are CRLF, and the parser has to cope with that (it matches
+# `\r?\n` around EndProject). Keep the fixture byte-exact so a clone on any
+# platform still exercises that path instead of a normalised LF copy.
+tests/fixtures/*.sln -text

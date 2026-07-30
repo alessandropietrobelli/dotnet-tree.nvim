@@ -49,7 +49,7 @@ function M.parse(csproj_path)
 
   -- PackageReference Include="X" Version="Y" (single line)
   local seen_pkg = {}
-  for tag in content:gmatch("<PackageReference[^/>]*/?>") do
+  for tag in content:gmatch("<PackageReference%s(.-)>") do
     local include = tag:match('Include%s*=%s*"([^"]+)"')
     local version = tag:match('Version%s*=%s*"([^"]+)"')
     if include and not seen_pkg[include] then
@@ -66,7 +66,11 @@ function M.parse(csproj_path)
     end
   end
 
-  for tag in content:gmatch("<ProjectReference[^/>]*/?>") do
+  -- The attribute blob is captured with a non-greedy `.-` rather than a
+  -- negated class: `[^/>]` would stop at the first slash, which silently
+  -- dropped every reference written with forward slashes -- the normal style
+  -- in repositories authored on macOS or Linux.
+  for tag in content:gmatch("<ProjectReference%s(.-)>") do
     local include = tag:match('Include%s*=%s*"([^"]+)"')
     if include then
       local norm = include:gsub("\\", "/")
