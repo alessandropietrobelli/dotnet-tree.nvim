@@ -100,6 +100,40 @@ describe("parser.csproj", function()
   it("returns nil for a file that does not exist", function()
     assert.is_nil(csproj.parse(FIXTURES .. "/DoesNotExist.csproj"))
   end)
+
+  -- The tag scanner reads up to the first '>', so an unescaped '>' inside an
+  -- attribute truncates the tag. XML requires &gt; there, so this is a
+  -- limitation rather than a defect, but the failure is silent and the two
+  -- attribute orderings behave differently, which is worth pinning down.
+  it("degrades predictably on an unescaped > inside an attribute", function()
+    local result = csproj.parse(FIXTURES .. "/EdgeCases.csproj")
+    local seen = {}
+    for _, ref in ipairs(result.project_references) do
+      seen[vim.fn.fnamemodify(ref.path, ":t")] = true
+    end
+
+    -- Escaped properly: read, whatever the attribute order.
+    assert.is_true(seen["Escaped.csproj"] == true)
+    -- Unescaped, but the Include comes first, so it has already been read.
+    assert.is_true(seen["GtAfter.csproj"] == true)
+    -- Unescaped and the Include comes after it: the reference is lost.
+    assert.is_nil(seen["GtBefore.csproj"])
+    -- A later, well-formed entry is unaffected: one bad tag does not
+    -- desynchronise the rest of the file.
+    assert.is_true(seen["Live.csproj"] == true)
+  end)
+
+  -- Known defect. slnx.lua strips comments before scanning (`<!%-%-.-%-%->`),
+  -- csproj.lua does not, so a commented-out entry is reported as a real
+  -- dependency. Unlike a dropped reference this shows something that is not
+  -- there. Observed in the wild: jellyfin's Emby.Server.Implementations.csproj
+  -- carries a commented-out IDisposableAnalyzers reference.
+  pending("ignores references and packages inside XML comments", function()
+    local result = csproj.parse(FIXTURES .. "/EdgeCases.csproj")
+    for _, ref in ipairs(result.project_references) do
+      assert.are_not.equal("Commented.csproj", vim.fn.fnamemodify(ref.path, ":t"))
+    end
+  end)
 end)
 
 describe("parser.cpm", function()
