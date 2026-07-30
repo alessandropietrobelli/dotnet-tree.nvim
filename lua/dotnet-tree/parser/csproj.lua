@@ -29,6 +29,11 @@ function M.parse(csproj_path)
   local content = f:read("*a")
   f:close()
 
+  -- Drop comments before scanning, the way parser/slnx.lua already does.
+  -- Without this a commented-out entry is reported as a real dependency, which
+  -- is worse than missing one: the tree shows something that is not there.
+  content = content:gsub("<!%-%-.-%-%->", "")
+
   local result = {
     path = csproj_path,
     dir = vim.fn.fnamemodify(csproj_path, ":h"),

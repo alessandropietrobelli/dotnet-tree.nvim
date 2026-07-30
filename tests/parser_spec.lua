@@ -123,16 +123,32 @@ describe("parser.csproj", function()
     assert.is_true(seen["Live.csproj"] == true)
   end)
 
-  -- Known defect. slnx.lua strips comments before scanning (`<!%-%-.-%-%->`),
-  -- csproj.lua does not, so a commented-out entry is reported as a real
-  -- dependency. Unlike a dropped reference this shows something that is not
-  -- there. Observed in the wild: jellyfin's Emby.Server.Implementations.csproj
-  -- carries a commented-out IDisposableAnalyzers reference.
-  pending("ignores references and packages inside XML comments", function()
+  -- Regression: comments used to be scanned like any other markup, so a
+  -- commented-out entry was reported as a real dependency. Observed in the
+  -- wild before the fix: jellyfin's Emby.Server.Implementations.csproj carries
+  -- a commented-out IDisposableAnalyzers reference, and the tree listed it
+  -- with a version resolved from central package management.
+  it("ignores references and packages inside XML comments", function()
     local result = csproj.parse(FIXTURES .. "/EdgeCases.csproj")
+
     for _, ref in ipairs(result.project_references) do
       assert.are_not.equal("Commented.csproj", vim.fn.fnamemodify(ref.path, ":t"))
     end
+    local names = {}
+    for _, pkg in ipairs(result.packages) do
+      names[pkg.name] = true
+    end
+    assert.is_nil(names["Commented.Package"])
+
+    -- The live entries either side of the comments must survive it.
+    local live_ref = false
+    for _, ref in ipairs(result.project_references) do
+      if vim.fn.fnamemodify(ref.path, ":t") == "Live.csproj" then
+        live_ref = true
+      end
+    end
+    assert.is_true(live_ref)
+    assert.is_true(names["Live.Package"] == true)
   end)
 end)
 
@@ -144,6 +160,15 @@ describe("parser.cpm", function()
   it("reads versions declared as attributes", function()
     local versions = cpm.parse(FIXTURES .. "/Directory.Packages.props")
     assert.are.equal("9.9.9", versions["NoVersion.FromCpm"])
+    assert.are.equal("4.0.0", versions["Serilog"])
+  end)
+
+  -- Same regression as the csproj side. A commented-out PackageVersion used to
+  -- be treated as the effective version, which in a central-package-management
+  -- repository means the tree quotes a version that is not in force.
+  it("ignores versions inside XML comments", function()
+    local versions = cpm.parse(FIXTURES .. "/Directory.Packages.props")
+    assert.is_nil(versions["Commented.Cpm"])
     assert.are.equal("4.0.0", versions["Serilog"])
   end)
 

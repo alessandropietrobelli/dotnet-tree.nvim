@@ -29,6 +29,8 @@ function M.parse(props_path)
   local content = f:read("*a")
   f:close()
 
+  content = content:gsub("<!%-%-.-%-%->", "")
+
   local versions = {}
   for tag in content:gmatch("<PackageVersion%s(.-)>") do
     local include = tag:match('Include%s*=%s*"([^"]+)"')

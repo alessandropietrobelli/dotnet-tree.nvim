@@ -23,4 +23,13 @@
     <ProjectReference Include="../Live/Live.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- TODO: bring this back once the analyzer is fixed.
+    <PackageReference Include="Commented.Package" Version="1.0.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    -->
+    <PackageReference Include="Live.Package" Version="2.0.0" />
+  </ItemGroup>
+
 </Project>
