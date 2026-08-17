@@ -8,8 +8,13 @@ build, run, test and watch straight from the tree.
 > **Status:** early. The feature set below works day to day, but the API and mappings may still move
 > before `v1.0.0`. Feedback and issues very welcome.
 
-<!-- TODO(demo): replace with a GIF or asciinema cast of the tree in action.
-     This is the single highest-impact thing in this README — do not publish without it. -->
+![dotnet-tree.nvim rendering the jellyfin solution: packages with the versions
+central package management resolved for them, project references, and
+diagnostics on files that were never opened](assets/demo.gif)
+
+<sub>Recorded on a [jellyfin](https://github.com/jellyfin/jellyfin) checkout —
+42 projects, central package management. The demo is a script:
+[`assets/demo.tape`](assets/demo.tape).</sub>
 
 ## Why
 
