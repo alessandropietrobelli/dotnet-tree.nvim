@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Alpha/Alpha.csproj" />
+    <Project Path="src\Beta\Beta.csproj" />
+  </Folder>
+  <Folder Name="/src/nested/">
+    <Project Path="src/Gamma/Gamma.csproj" />
+  </Folder>
+</Solution>

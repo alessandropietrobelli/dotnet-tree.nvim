@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Well-formed: the comparison is escaped, as XML requires. -->
+    <ProjectReference Condition=" '$(N)' &gt; '1' " Include="../Escaped/Escaped.csproj" />
+
+    <!-- Hand-written and not well-formed, but common enough in real projects.
+         The tag scanner stops at the first '>', so everything after it is lost.
+         Here the Include has already been read, so the reference survives. -->
+    <ProjectReference Include="../GtAfter/GtAfter.csproj" Condition=" '$(N)' > '1' " />
+
+    <!-- Same defect, opposite attribute order: the scan stops before reaching
+         the Include, so this reference is dropped. Documented in the spec. -->
+    <ProjectReference Condition=" '$(N)' > '1' " Include="../GtBefore/GtBefore.csproj" />
+
+    <!-- Commented out: must not be reported as a real dependency. -->
+    <!-- <ProjectReference Include="../Commented/Commented.csproj" /> -->
+
+    <ProjectReference Include="../Live/Live.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- TODO: bring this back once the analyzer is fixed.
+    <PackageReference Include="Commented.Package" Version="1.0.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    -->
+    <PackageReference Include="Live.Package" Version="2.0.0" />
+  </ItemGroup>
+
+</Project>

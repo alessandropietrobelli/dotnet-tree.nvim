@@ -15,7 +15,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
-          args: --check lua/
+          args: --check lua/ tests/
 
   luacheck:
     name: luacheck
@@ -73,6 +73,28 @@ jobs:
                   'dotnet-tree.parser.cpm',
                 }) do require(m) end print('all modules loaded')" \
             -c "qa!"
+
+  tests:
+    name: tests (${{ matrix.neovim }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim: [stable, nightly]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+      # The parser modules do not depend on neo-tree, so the suite only needs
+      # plenary for its busted harness.
+      - name: Fetch plenary
+        run: git clone --depth 1 https://github.com/nvim-lua/plenary.nvim deps/plenary.nvim
+      - name: Run tests
+        run: |
+          nvim --headless -u tests/minimal_init.lua \
+            -c "PlenaryBustedDirectory tests/ {minimal_init = 'tests/minimal_init.lua'}"
 
   docs:
     name: vimdoc tags

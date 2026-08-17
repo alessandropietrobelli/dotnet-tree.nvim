@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Windows-style separators: what Visual Studio writes. -->
+    <ProjectReference Include="..\Core\Core.csproj" />
+    <!-- POSIX separators: what `dotnet add reference` writes on macOS and
+         Linux, and what most cross-platform repositories contain. -->
+    <ProjectReference Include="../Utils/Utils.csproj" />
+    <!-- Mixed, which happens when a path is hand-edited. -->
+    <ProjectReference Include="../Nested\Deep/Deep.csproj" />
+    <!-- No leading relative segment. -->
+    <ProjectReference Include="Sibling/Sibling.csproj" />
+    <!-- Extra attributes after the Include, and an unusual spacing. -->
+    <ProjectReference Include = "../Aliased/Aliased.csproj" PrivateAssets="all" />
+    <!-- Split across lines. -->
+    <ProjectReference
+      Include="../MultiLine/MultiLine.csproj" />
+    <!-- Open/close pair rather than a self-closing tag. -->
+    <ProjectReference Include="../Paired/Paired.csproj">
+      <PrivateAssets>all</PrivateAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog" Version="3.1.1" />
+    <PackageReference Include="Polly" Version="8.4.1" PrivateAssets="all" />
+    <PackageReference Include="NoVersion.FromCpm" />
+    <PackageReference Include="Multi.Line.Package">
+      <Version>2.0.0</Version>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
