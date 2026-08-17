@@ -6,7 +6,8 @@ projects, project references, packages — instead of the way the files happen t
 build, run, test and watch straight from the tree.
 
 > **Status:** early. The feature set below works day to day, but the API and mappings may still move
-> before `v1.0.0`. Feedback and issues very welcome.
+> before `v1.0.0`. Changes are listed in [CHANGELOG.md](CHANGELOG.md). Feedback and issues very
+> welcome.
 
 <!-- TODO(demo): replace with a GIF or asciinema cast of the tree in action.
      This is the single highest-impact thing in this README — do not publish without it. -->

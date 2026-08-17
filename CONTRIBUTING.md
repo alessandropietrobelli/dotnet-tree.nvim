@@ -33,13 +33,16 @@ re-required on navigate, so most changes show up without restarting Neovim.
 ## Before opening a pull request
 
 ```sh
-stylua lua/          # formatting is enforced in CI
+stylua lua/ tests/   # formatting is enforced in CI, over both directories
 luacheck lua/
+nvim --headless -u tests/minimal_init.lua \
+  -c "PlenaryBustedDirectory tests/ {minimal_init = 'tests/minimal_init.lua'}"
 ```
 
-CI additionally loads every module against Neovim stable and nightly, and
-regenerates the help tags. Keep `doc/dotnet-tree.txt` in sync when you change
-behaviour or mappings.
+CI additionally loads every module against Neovim stable and nightly, runs the
+test suite, and regenerates the help tags. Keep `doc/dotnet-tree.txt` in sync
+when you change behaviour or mappings, and add a line to the `Unreleased`
+section of [CHANGELOG.md](CHANGELOG.md) for anything a user would notice.
 
 ## Code layout
 
