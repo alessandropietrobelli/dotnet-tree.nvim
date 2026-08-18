@@ -9,6 +9,20 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-18
+
+Documentation only. No plugin code changed between `v0.1.1` and `v0.1.2`.
+
+### Fixed
+
+- `0.1.1` corrected the install snippet and the troubleshooting entry in the
+  README but left `doc/dotnet-tree.txt` behind, so the manual shipped inside
+  the tag still carried both defects: an install snippet without
+  `lazy = false`, and an error string neo-tree does not raise. Someone with a
+  working install who opened `:help dotnet-tree-installation` to set up a
+  second machine would have copied the broken recipe back out. The two
+  documents now agree.
+
 ## [0.1.1] - 2026-08-18
 
 Documentation only. No plugin code changed between `v0.1.0` and `v0.1.1`.
@@ -99,6 +113,7 @@ projects.
   The rest of the file still scans correctly. Asserted in the tests as a
   limitation rather than fixed.
 
-[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/releases/tag/v0.1.0
