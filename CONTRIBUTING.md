@@ -41,16 +41,21 @@ re-required on navigate, so most changes show up without restarting Neovim.
 ## Before opening a pull request
 
 ```sh
-stylua lua/ tests/   # formatting is enforced in CI, over both directories
-luacheck lua/
+stylua lua/ tests/ scripts/   # formatting is enforced in CI, over all three
+luacheck lua/ scripts/
 nvim --headless -u tests/minimal_init.lua \
   -c "PlenaryBustedDirectory tests/ {minimal_init = 'tests/minimal_init.lua'}"
+nvim -l scripts/check-docs-consistency.lua
 ```
 
 CI additionally loads every module against Neovim stable and nightly, runs the
 test suite, and regenerates the help tags. Keep `doc/dotnet-tree.txt` in sync
 when you change behaviour or mappings, and add a line to the `Unreleased`
 section of [CHANGELOG.md](CHANGELOG.md) for anything a user would notice.
+
+The install instructions live in two places — `README.md` and
+`doc/dotnet-tree.txt` — and `check-docs-consistency.lua` fails if they disagree.
+If it stops you, edit whichever file it names rather than relaxing the check.
 
 ## Code layout
 

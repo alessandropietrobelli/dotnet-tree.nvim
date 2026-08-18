@@ -1,17 +1,25 @@
--- Keep the install instructions in README.md and doc/dotnet-tree.txt from drifting apart.
+-- Keep the documentation from drifting away from what the project actually does.
 --
--- Both documents describe the same lazy.nvim spec, and nothing but attention has been
--- keeping them in agreement. Twice in one day that attention was not enough: v0.1.1
--- shipped a README with `lazy = false` and a manual without it, and a troubleshooting
--- entry quoting an error neo-tree does not raise.
+-- Two independent checks, both of the same shape: a fact is written down in more than
+-- one place, and nothing but attention keeps the copies in agreement.
 --
--- This compares substance, not bytes. The two files wrap differently -- the manual is
+--   1. The install instructions in README.md and doc/dotnet-tree.txt
+--   2. The commands CONTRIBUTING.md tells you to run, against the ones CI runs
+--
+-- On the first: both documents describe the same lazy.nvim spec, and twice in one day
+-- attention was not enough. v0.1.1 shipped a README with `lazy = false` and a manual
+-- without it, plus a troubleshooting entry quoting an error neo-tree does not raise.
+--
+-- Throughout, this compares substance, not bytes. The two files wrap differently -- the manual is
 -- held to 78 columns and the README is not -- so a textual diff would fail on a line
 -- break and get switched off within a fortnight. Instead it asserts a short list of
 -- claims that must hold in both, and a short list of strings that must appear in
 -- neither. Add to those lists when a future fix has to land in both places.
 --
 -- Run: nvim -l scripts/check-docs-consistency.lua
+
+local CI = ".github/workflows/ci.yml"
+local CONTRIBUTING = "CONTRIBUTING.md"
 
 local DOCS = { "README.md", "doc/dotnet-tree.txt" }
 
@@ -91,8 +99,74 @@ for _, path in ipairs(DOCS) do
   end
 end
 
+-- The commands CONTRIBUTING.md documents have to be the ones CI actually runs.
+--
+-- CONTRIBUTING said `stylua lua/ tests/` and `luacheck lua/` for a month after CI had
+-- been widened to cover scripts/ too, so anyone following it to the letter formatted
+-- less than CI checked and got a red build for doing as they were told.
+--
+-- The paths are read out of ci.yml rather than written down here on purpose. A third
+-- hardcoded list would be a third copy, free to drift exactly like the two this script
+-- already exists to police. Widen a CI job and this fails until CONTRIBUTING catches up.
+local function paths_in(argline)
+  local paths = {}
+  for token in argline:gmatch("%S+") do
+    if not token:match("^%-") then
+      table.insert(paths, token)
+    end
+  end
+  return paths
+end
+
+local ci = read(CI)
+local contributing = read(CONTRIBUTING)
+
+if not ci then
+  fail("%s: cannot be read", CI)
+elseif not contributing then
+  fail("%s: cannot be read", CONTRIBUTING)
+else
+  -- an array, not a hash: the same breakage should always print the same way
+  local ci_commands = {
+    { tool = "stylua", argline = ci:match("args:%s*([^\n]*)") },
+    { tool = "luacheck", argline = ci:match("run:%s*luacheck([^\n]*)") },
+  }
+
+  for _, command in ipairs(ci_commands) do
+    local tool, argline = command.tool, command.argline
+    if not argline then
+      fail("%s: cannot find how CI invokes %s -- this script needs updating", CI, tool)
+    else
+      local documented = contributing:match("\n(" .. tool .. "[^\n]*)")
+      if not documented then
+        fail("%s: does not tell contributors to run %s, but CI does", CONTRIBUTING, tool)
+      else
+        for _, path in ipairs(paths_in(argline)) do
+          if not documented:find(path, 1, true) then
+            fail(
+              "%s: documents `%s` but CI runs %s over %s as well\n    "
+                .. "a contributor following this file gets a red build for doing as they were told",
+              CONTRIBUTING,
+              documented:gsub("%s*#.*$", ""),
+              tool,
+              path
+            )
+          end
+        end
+      end
+    end
+  end
+
+  -- every script CI runs through `nvim -l` should be runnable locally too
+  for script in ci:gmatch("run:%s*nvim %-l%s+(%S+)") do
+    if not contributing:find(script, 1, true) then
+      fail("%s: does not mention `nvim -l %s`, which CI runs on every pull request", CONTRIBUTING, script)
+    end
+  end
+end
+
 if #failures > 0 then
-  io.stderr:write("README.md and doc/dotnet-tree.txt document the same install, and they disagree.\n\n")
+  io.stderr:write("The documentation disagrees with itself, or with what CI does.\n\n")
   for _, message in ipairs(failures) do
     io.stderr:write("  - " .. message .. "\n")
   end
@@ -100,4 +174,4 @@ if #failures > 0 then
   os.exit(1)
 end
 
-print(("install instructions agree across %d documents"):format(#DOCS))
+print(("install instructions agree across %d documents, and CONTRIBUTING matches CI"):format(#DOCS))
