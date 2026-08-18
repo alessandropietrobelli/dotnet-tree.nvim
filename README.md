@@ -60,6 +60,8 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 {
   "nvim-neo-tree/neo-tree.nvim",
+  branch = "v3.x",
+  lazy = false, -- neo-tree lazy-loads itself; see the note below
   dependencies = {
     "nvim-lua/plenary.nvim",
     "MunifTanjim/nui.nvim",
@@ -74,6 +76,14 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
   },
 }
 ```
+
+`lazy = false` is what neo-tree's own README recommends, and this source needs it too: with
+neo-tree deferred behind a key mapping, `dotnet-tree.nvim` is not on the `runtimepath` yet, so
+`:checkhealth dotnet-tree` reports *no healthcheck found*, `:help dotnet-tree` reports `E149`, and
+`:Neotree` is not a command until you have pressed the mapping once. neo-tree does its own lazy
+loading internally, so this costs you nothing at startup.
+
+`branch = "v3.x"` pins neo-tree to the major version this source is written against.
 
 Then open it with `:Neotree dotnet-tree reveal`.
 
@@ -155,8 +165,12 @@ opts = {
 Run `:checkhealth dotnet-tree` first — it verifies neo-tree is installed, that the source is
 registered, and that `dotnet` is on your `PATH`.
 
-**`Source dotnet-tree not found`** — `"dotnet-tree"` is missing from `opts.sources`. See the
-callout in [Installation](#installation).
+**`Invalid argument: dotnet-tree`** (from `neo-tree/command/parser.lua`) — `"dotnet-tree"` is
+missing from `opts.sources`. See the callout in [Installation](#installation).
+
+**`No healthcheck found for "dotnet-tree"`, `E149: No help for dotnet-tree`, or `:Neotree` is not
+an editor command** — neo-tree is being lazy-loaded, so neither plugin is on the `runtimepath`
+yet. Set `lazy = false` on the neo-tree spec as shown in [Installation](#installation).
 
 **`no .sln/.slnx found under <path>`** — the source looks for a solution under the current working
 directory. Open Neovim at the repository root, or press `s` to pick one explicitly.
