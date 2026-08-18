@@ -91,13 +91,28 @@ projects.
 ### Known limitations
 
 - A package that declares its version as a `<Version>` child element instead of
-  an attribute loses that version, in both `.csproj` and
-  `Directory.Packages.props`. Recorded as pending tests.
-- An unescaped `>` inside an attribute value is not valid XML, and the scanner
-  degrades asymmetrically on it: when the `Include` precedes the offending
-  attribute the reference survives, when it follows the reference is dropped.
-  The rest of the file still scans correctly. Asserted in the tests as a
-  limitation rather than fixed.
+  an attribute loses that version in `.csproj`, but **not** in
+  `Directory.Packages.props`. `csproj.lua` has a branch written for exactly this
+  form, and it is unreachable: the single-line loop matches the opening tag,
+  records the package with an empty version and marks it as seen
+  (`csproj.lua:57-64`), so the child-element loop skips it (`csproj.lua:66-72`).
+  `cpm.lua` is unaffected because its first loop requires both `Include` and
+  `Version` and therefore records nothing for this form (`cpm.lua:35-41`),
+  leaving its own child-element branch reachable (`cpm.lua:42-49`). Measured:
+  `csproj.lua` returns an empty version, `cpm.lua` returns the declared one.
+  Recorded as pending tests. Tracked in
+  [#9](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/9).
+- A literal `>` inside an attribute value is **valid** XML — XML 1.0 §2.4
+  forbids `<` and `&` in attribute values, not `>` — and MSBuild builds such a
+  project without a warning. The tag scanners in `csproj.lua` and `cpm.lua` read
+  up to the first `>` regardless of quoting, so they truncate the tag and
+  degrade asymmetrically: when the `Include` precedes the offending attribute the
+  reference survives, when it follows the reference is dropped with no error.
+  This is silent data loss on a file the toolchain accepts, not graceful
+  degradation on malformed input. `parser/slnx.lua` already handles the same
+  construct correctly (`find_tag_end`, `slnx.lua:86-103`). The rest of the file
+  still scans correctly. Asserted in the tests as current behaviour. Tracked in
+  [#10](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/10).
 
 [Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.1...HEAD
 [0.1.1]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.0...v0.1.1

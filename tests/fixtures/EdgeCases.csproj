@@ -5,16 +5,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Well-formed: the comparison is escaped, as XML requires. -->
+    <!-- The comparison is escaped. Both this and the two below are valid XML:
+         XML 1.0 section 2.4 forbids '<' and '&' in an attribute value, not '>'. -->
     <ProjectReference Condition=" '$(N)' &gt; '1' " Include="../Escaped/Escaped.csproj" />
 
-    <!-- Hand-written and not well-formed, but common enough in real projects.
-         The tag scanner stops at the first '>', so everything after it is lost.
-         Here the Include has already been read, so the reference survives. -->
+    <!-- A literal '>', which is valid XML and which MSBuild builds without a
+         warning. The tag scanner stops at the first '>' regardless of quoting,
+         so everything after it is lost. Here the Include has already been read,
+         so the reference survives. -->
     <ProjectReference Include="../GtAfter/GtAfter.csproj" Condition=" '$(N)' > '1' " />
 
-    <!-- Same defect, opposite attribute order: the scan stops before reaching
-         the Include, so this reference is dropped. Documented in the spec. -->
+    <!-- Same construct, opposite attribute order: the scan stops before
+         reaching the Include, so this reference is dropped with no error --
+         silent data loss on a file the toolchain accepts. Documented in the
+         spec, and tracked in issue #10. -->
     <ProjectReference Condition=" '$(N)' > '1' " Include="../GtBefore/GtBefore.csproj" />
 
     <!-- Commented out: must not be reported as a real dependency. -->
