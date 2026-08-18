@@ -108,10 +108,28 @@ end
 -- The paths are read out of ci.yml rather than written down here on purpose. A third
 -- hardcoded list would be a third copy, free to drift exactly like the two this script
 -- already exists to police. Widen a CI job and this fails until CONTRIBUTING catches up.
+--
+-- Every invocation is collected, never just the first one found. Taking the first match
+-- made this fail green: a step carrying its own `args:` above stylua's shadowed the real
+-- one, and the check went on reporting that everything agreed while it had stopped
+-- looking at stylua entirely. A check that cannot tell you it has stopped checking is
+-- worse than no check, because it buys confidence it no longer earns.
+--
+-- Each tool is also anchored to something that identifies it -- the action it comes
+-- from, or its own name on the command line -- so another action's `args:` is ignored
+-- rather than blamed on stylua.
+local CI_COMMANDS = {
+  { tool = "stylua", pattern = "uses:%s*JohnnyMorganz/stylua%-action.-args:%s*([^\n]*)" },
+  { tool = "luacheck", pattern = "run:%s*luacheck([^\n]*)" },
+}
+
+-- Only tokens shaped like paths. Flags are not paths, and neither are the values that
+-- follow them: reporting `CI runs stylua over en_GB as well` for `--dictionary en_GB`
+-- is the kind of nonsense that gets a check switched off rather than fixed.
 local function paths_in(argline)
   local paths = {}
   for token in argline:gmatch("%S+") do
-    if not token:match("^%-") then
+    if token:match("/$") or token:match("%.lua$") then
       table.insert(paths, token)
     end
   end
@@ -126,34 +144,33 @@ if not ci then
 elseif not contributing then
   fail("%s: cannot be read", CONTRIBUTING)
 else
-  -- an array, not a hash: the same breakage should always print the same way
-  local ci_commands = {
-    { tool = "stylua", argline = ci:match("args:%s*([^\n]*)") },
-    { tool = "luacheck", argline = ci:match("run:%s*luacheck([^\n]*)") },
-  }
+  for _, command in ipairs(CI_COMMANDS) do
+    local tool = command.tool
+    local documented = contributing:match("\n(" .. tool .. "[^\n]*)")
+    local invocations = 0
 
-  for _, command in ipairs(ci_commands) do
-    local tool, argline = command.tool, command.argline
-    if not argline then
-      fail("%s: cannot find how CI invokes %s -- this script needs updating", CI, tool)
-    else
-      local documented = contributing:match("\n(" .. tool .. "[^\n]*)")
+    for argline in ci:gmatch(command.pattern) do
+      invocations = invocations + 1
       if not documented then
         fail("%s: does not tell contributors to run %s, but CI does", CONTRIBUTING, tool)
-      else
-        for _, path in ipairs(paths_in(argline)) do
-          if not documented:find(path, 1, true) then
-            fail(
-              "%s: documents `%s` but CI runs %s over %s as well\n    "
-                .. "a contributor following this file gets a red build for doing as they were told",
-              CONTRIBUTING,
-              documented:gsub("%s*#.*$", ""),
-              tool,
-              path
-            )
-          end
+        break
+      end
+      for _, path in ipairs(paths_in(argline)) do
+        if not documented:find(path, 1, true) then
+          fail(
+            "%s: documents `%s` but CI runs %s over %s as well\n    "
+              .. "a contributor following this file gets a red build for doing as they were told",
+            CONTRIBUTING,
+            documented:gsub("%s*#.*$", ""),
+            tool,
+            path
+          )
         end
       end
+    end
+
+    if invocations == 0 then
+      fail("%s: cannot find how CI invokes %s -- this script needs updating", CI, tool)
     end
   end
 
