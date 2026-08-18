@@ -9,7 +9,25 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
-## [0.1.0] - Unreleased
+## [0.1.1] - 2026-08-18
+
+Documentation only. No plugin code changed between `v0.1.0` and `v0.1.1`.
+
+### Fixed
+
+- The lazy.nvim install snippet in the README gave neo-tree only a `keys`
+  handler, so on a cold install neither plugin was on the `runtimepath` until
+  the mapping was pressed: `:checkhealth dotnet-tree` reported no healthcheck
+  found, `:help dotnet-tree` reported `E149`, and `:Neotree` was not yet a
+  command — exactly the two steps the README tells you to run first. The
+  snippet now sets `lazy = false`, as neo-tree's own README recommends, and
+  pins `branch = "v3.x"`.
+- The troubleshooting entry quoted an error neo-tree does not raise. Omitting
+  `"dotnet-tree"` from `opts.sources` produces
+  `neo-tree/command/parser.lua:199: Invalid argument: dotnet-tree`, which is
+  what someone searching the error text will have in their clipboard.
+
+## [0.1.0] - 2026-08-18
 
 First public release. Extracted, with its history, from the author's Neovim
 configuration, where it had been in daily use on .NET solutions of up to ~200
@@ -81,5 +99,6 @@ projects.
   The rest of the file still scans correctly. Asserted in the tests as a
   limitation rather than fixed.
 
-[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/releases/tag/v0.1.0
