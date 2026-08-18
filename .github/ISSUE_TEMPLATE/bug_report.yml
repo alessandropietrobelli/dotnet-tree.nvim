@@ -5,6 +5,12 @@ body:
   - type: markdown
     attributes:
       value: |
+        Two things make a report reproducible, and without them the thread turns
+        into five rounds of questions:
+
+        1. the output of `:checkhealth dotnet-tree`, and
+        2. the exact XML that renders wrong.
+
         Before filing: if the `dotnet-tree` source does not appear at all, run
         `:checkhealth dotnet-tree`. It is almost always `"dotnet-tree"` missing
         from neo-tree's `opts.sources`.
@@ -13,7 +19,7 @@ body:
     id: checkhealth
     attributes:
       label: ":checkhealth dotnet-tree output"
-      description: Paste the full output.
+      description: Paste the full output, including the lines that pass.
       render: text
     validations:
       required: true
@@ -23,6 +29,26 @@ body:
     attributes:
       label: What happened
       description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: xml
+    attributes:
+      label: The XML that renders wrong
+      description: |
+        The smallest fragment that reproduces it, sanitised — from the `.sln`,
+        `.slnx`, `.csproj` or `Directory.Packages.props`, whichever holds the
+        thing that is missing or wrong.
+
+        Paste it **verbatim**. The parsers match on text rather than reading XML
+        properly, so attribute order, quoting style, self-closing tags,
+        whitespace, comments and slash direction all change the outcome —
+        retyping or reformatting the fragment usually hides the bug.
+
+        Rename anything private; keep the structure. If the bug is not about how
+        something renders, write `N/A`.
+      render: xml
     validations:
       required: true
 
@@ -53,6 +79,14 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: plugin
+    attributes:
+      label: dotnet-tree.nvim version
+      placeholder: tag, or commit sha if you track main
+    validations:
+      required: true
+
   - type: dropdown
     id: format
     attributes:
@@ -71,9 +105,30 @@ body:
       options:
         - label: The repository has a `Directory.Packages.props`
 
+  - type: input
+    id: dotnet
+    attributes:
+      label: dotnet SDK version
+      description: "`dotnet --version`. Leave empty if the CLI is not installed."
+
   - type: textarea
     id: solution
     attributes:
-      label: Solution file (optional but very helpful)
-      description: A sanitised `.sln`/`.slnx` that reproduces the problem.
+      label: Whole solution file (optional)
+      description: >-
+        If the fragment above does not reproduce it on its own, a sanitised
+        complete `.sln`/`.slnx` helps.
       render: xml
+
+  - type: checkboxes
+    id: known
+    attributes:
+      label: Already documented
+      description: >-
+        Two parsing limits are known, and pinned down in the test suite.
+      options:
+        - label: >-
+            I checked the known limitations in
+            [CHANGELOG.md](https://github.com/alessandropietrobelli/dotnet-tree.nvim/blob/main/CHANGELOG.md)
+            — a `<Version>` child element instead of an attribute, and an
+            unescaped `>` inside an attribute value — and this is not one of them.

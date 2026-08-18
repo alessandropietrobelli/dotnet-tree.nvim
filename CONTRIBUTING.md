@@ -11,8 +11,16 @@ Please include:
 - The output of `:checkhealth dotnet-tree`
 - Whether the solution is `.sln` or `.slnx`, and whether the repository uses
   Central Package Management (`Directory.Packages.props`)
-- A minimal reproduction if you can manage one — a tiny solution that triggers
-  the problem is worth a lot more than a description
+- The exact XML that renders wrong — the smallest fragment from the `.sln`,
+  `.slnx`, `.csproj` or `Directory.Packages.props`, pasted verbatim and
+  sanitised. The parsers match on text rather than reading XML properly, so
+  quoting, attribute order, self-closing tags and slash direction all matter;
+  a retyped fragment usually hides the bug
+
+The [bug report form](.github/ISSUE_TEMPLATE/bug_report.yml) asks for all of
+this. Usage questions belong in
+[Discussions](https://github.com/alessandropietrobelli/dotnet-tree.nvim/discussions)
+rather than in an issue.
 
 The most common report is *"the source doesn't appear"*. That is almost always
 `"dotnet-tree"` missing from neo-tree's `opts.sources`; `:checkhealth
