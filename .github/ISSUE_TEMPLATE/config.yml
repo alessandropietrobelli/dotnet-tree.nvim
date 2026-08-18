@@ -1,0 +1,20 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question about using the plugin
+    url: https://github.com/alessandropietrobelli/dotnet-tree.nvim/discussions/new?category=q-a
+    about: >-
+      Configuration, mappings, how to make something work — ask in Discussions
+      rather than opening an issue. Start with :checkhealth dotnet-tree; if the
+      source does not appear at all it is almost always "dotnet-tree" missing
+      from neo-tree's opts.sources.
+  - name: Idea, before it is a request
+    url: https://github.com/alessandropietrobelli/dotnet-tree.nvim/discussions/new?category=ideas
+    about: >-
+      Not sure the plugin should do it, or whether it already does? Discuss it
+      first. Concrete proposals can go straight to a feature request.
+  - name: Known limitations
+    url: https://github.com/alessandropietrobelli/dotnet-tree.nvim/blob/main/CHANGELOG.md
+    about: >-
+      Two parsing limits are already documented and pinned down in the test
+      suite — a <Version> child element instead of an attribute, and an
+      unescaped > inside an attribute value. Check the changelog before filing.
