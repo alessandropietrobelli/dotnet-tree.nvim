@@ -76,7 +76,9 @@ describe("parser.csproj", function()
     assert.are.equal("", by_name["NoVersion.FromCpm"])
   end)
 
-  -- Known defect, present since the parser was written and not addressed here.
+  -- Known defect in csproj.lua only, present since the parser was written and
+  -- not addressed here. cpm.lua reads the same form correctly, because its
+  -- first loop requires both Include and Version and so records nothing here.
   -- The single-line loop matches the opening tag of the child-element form and
   -- records the package with an empty version, so the multi-line loop that
   -- would read <Version> skips it as already seen. Independently, the
@@ -101,22 +103,26 @@ describe("parser.csproj", function()
     assert.is_nil(csproj.parse(FIXTURES .. "/DoesNotExist.csproj"))
   end)
 
-  -- The tag scanner reads up to the first '>', so an unescaped '>' inside an
-  -- attribute truncates the tag. XML requires &gt; there, so this is a
-  -- limitation rather than a defect, but the failure is silent and the two
-  -- attribute orderings behave differently, which is worth pinning down.
-  it("degrades predictably on an unescaped > inside an attribute", function()
+  -- The tag scanner reads up to the first '>' regardless of quoting, so a
+  -- literal '>' inside an attribute value truncates the tag. That '>' is valid
+  -- XML -- XML 1.0 section 2.4 forbids '<' and '&' in attribute values, not
+  -- '>' -- and MSBuild builds such a project without a warning, so this is a
+  -- defect rather than graceful degradation on malformed input: the reference
+  -- is dropped silently and the two attribute orderings differ. slnx.lua
+  -- handles the same construct correctly (find_tag_end). Pinned as current
+  -- behaviour, not as desired behaviour; tracked in issue #10.
+  it("degrades predictably on a literal > inside an attribute", function()
     local result = csproj.parse(FIXTURES .. "/EdgeCases.csproj")
     local seen = {}
     for _, ref in ipairs(result.project_references) do
       seen[vim.fn.fnamemodify(ref.path, ":t")] = true
     end
 
-    -- Escaped properly: read, whatever the attribute order.
+    -- Escaped as &gt;: read, whatever the attribute order.
     assert.is_true(seen["Escaped.csproj"] == true)
-    -- Unescaped, but the Include comes first, so it has already been read.
+    -- Literal '>', but the Include comes first, so it has already been read.
     assert.is_true(seen["GtAfter.csproj"] == true)
-    -- Unescaped and the Include comes after it: the reference is lost.
+    -- Literal '>' and the Include comes after it: the reference is lost.
     assert.is_nil(seen["GtBefore.csproj"])
     -- A later, well-formed entry is unaffected: one bad tag does not
     -- desynchronise the rest of the file.
