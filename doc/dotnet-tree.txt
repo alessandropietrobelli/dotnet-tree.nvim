@@ -41,6 +41,8 @@ neo-tree's `sources` list: >lua
 
     {
       "nvim-neo-tree/neo-tree.nvim",
+      branch = "v3.x",
+      lazy = false,
       dependencies = {
         "nvim-lua/plenary.nvim",
         "MunifTanjim/nui.nvim",
@@ -52,6 +54,16 @@ neo-tree's `sources` list: >lua
       },
     }
 <
+`lazy = false` is what neo-tree's own README recommends, and this source needs
+it too. With neo-tree deferred behind a key mapping or a command, neither
+plugin is on the 'runtimepath' yet, so |:checkhealth-dotnet-tree| reports that
+no healthcheck exists, `:help dotnet-tree` fails with |E149|, and `:Neotree`
+is not a command until the mapping has been pressed once. neo-tree does its
+own lazy loading internally, so this costs nothing at startup.
+
+`branch = "v3.x"` pins neo-tree to the major version this source is written
+against.
+
 ==============================================================================
 4. USAGE                                               *dotnet-tree-usage*
 
@@ -124,9 +136,15 @@ solutions are discoverable from the current working directory.
 ==============================================================================
 8. TROUBLESHOOTING                           *dotnet-tree-troubleshooting*
 
-"Source dotnet-tree not found"
-    "dotnet-tree" is missing from neo-tree's `sources`.
-    See |dotnet-tree-installation|.
+"Invalid argument: dotnet-tree"
+    Raised by neo-tree's command parser. "dotnet-tree" is missing from
+    neo-tree's `sources`. See |dotnet-tree-installation|.
+
+'No healthcheck found for "dotnet-tree" plugin', "E149: No help for
+dotnet-tree", or ":Neotree" is not an editor command
+    neo-tree is being lazy-loaded, so neither plugin is on the 'runtimepath'
+    yet. Set `lazy = false` on the neo-tree spec, as shown in
+    |dotnet-tree-installation|.
 
 "[dotnet-tree] no .sln/.slnx found under <path>"
     No solution below the current working directory. Start Neovim at the
