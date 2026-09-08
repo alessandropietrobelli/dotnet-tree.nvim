@@ -1,0 +1,12 @@
+  Determining projects to restore...
+  Restored /home/dev/src/D/D.csproj (in 155 ms).
+/home/dev/src/D/Ok.cs(7,13): warning CS0219: The variable 'unused' is assigned but its value is never used [/home/dev/src/D/D.csproj]
+  D -> /home/dev/src/D/bin/Debug/net8.0/D.dll
+
+Build succeeded.
+
+/home/dev/src/D/Ok.cs(7,13): warning CS0219: The variable 'unused' is assigned but its value is never used [/home/dev/src/D/D.csproj]
+    1 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.30

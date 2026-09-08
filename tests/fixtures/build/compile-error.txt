@@ -1,0 +1,13 @@
+  Determining projects to restore...
+  Restored /home/dev/src/A/A.csproj (in 196 ms).
+/home/dev/src/A/Program.cs(7,22): error CS0029: Cannot implicitly convert type 'string' to 'int' [/home/dev/src/A/A.csproj]
+/home/dev/src/A/Program.cs(8,13): warning CS0219: The variable 'unused' is assigned but its value is never used [/home/dev/src/A/A.csproj]
+
+Build FAILED.
+
+/home/dev/src/A/Program.cs(8,13): warning CS0219: The variable 'unused' is assigned but its value is never used [/home/dev/src/A/A.csproj]
+/home/dev/src/A/Program.cs(7,22): error CS0029: Cannot implicitly convert type 'string' to 'int' [/home/dev/src/A/A.csproj]
+    1 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:02.69

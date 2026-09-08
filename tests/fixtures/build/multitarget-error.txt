@@ -1,0 +1,13 @@
+  Determining projects to restore...
+  Restored /home/dev/src/C/C.csproj (in 164 ms).
+/home/dev/src/C/Widget.cs(5,28): error CS0029: Cannot implicitly convert type 'string' to 'int' [/home/dev/src/C/C.csproj::TargetFramework=net8.0]
+/home/dev/src/C/Widget.cs(5,28): error CS0029: Cannot implicitly convert type 'string' to 'int' [/home/dev/src/C/C.csproj::TargetFramework=net9.0]
+
+Build FAILED.
+
+/home/dev/src/C/Widget.cs(5,28): error CS0029: Cannot implicitly convert type 'string' to 'int' [/home/dev/src/C/C.csproj::TargetFramework=net8.0]
+/home/dev/src/C/Widget.cs(5,28): error CS0029: Cannot implicitly convert type 'string' to 'int' [/home/dev/src/C/C.csproj::TargetFramework=net9.0]
+    0 Warning(s)
+    2 Error(s)
+
+Time Elapsed 00:00:02.15

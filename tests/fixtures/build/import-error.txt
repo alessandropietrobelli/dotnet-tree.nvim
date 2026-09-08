@@ -1,0 +1,11 @@
+  Determining projects to restore...
+  Restored /home/dev/src/E/E.csproj (in 156 ms).
+/home/dev/src/E/E.csproj(5,3): error MSB4019: The imported project "/home/dev/src/E/NoSuch.props" was not found. Confirm that the expression in the Import declaration "NoSuch.props", which evaluated to "NoSuch.props", is correct, and that the file exists on disk.
+
+Build FAILED.
+
+/home/dev/src/E/E.csproj(5,3): error MSB4019: The imported project "/home/dev/src/E/NoSuch.props" was not found. Confirm that the expression in the Import declaration "NoSuch.props", which evaluated to "NoSuch.props", is correct, and that the file exists on disk.
+    0 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:00.85

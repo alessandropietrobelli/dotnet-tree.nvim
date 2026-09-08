@@ -1,0 +1,11 @@
+  Determining projects to restore...
+/home/dev/src/B/B.csproj : error NU1101: Unable to find package Contoso.Nonexistent.Package. No packages exist with this id in source(s): nuget.org
+  Failed to restore /home/dev/src/B/B.csproj (in 674 ms).
+
+Build FAILED.
+
+/home/dev/src/B/B.csproj : error NU1101: Unable to find package Contoso.Nonexistent.Package. No packages exist with this id in source(s): nuget.org
+    0 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:01.45
