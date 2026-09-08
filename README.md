@@ -36,6 +36,10 @@ This source renders that graph.
   opened, and project rows carry the error and warning counts underneath them
 - **dotnet CLI actions** on the node under the cursor: build, clean, run, test, watch, add
   package / project reference, new file from template (with namespace inferred from the folder)
+- **Build errors in the quickfix list**, deduplicated and jumpable — including the ones no
+  language server can see, such as a failed restore, which stops compilation before any
+  compiler error is reported. `run`, `test` and `watch` stay in a terminal, where their
+  output is interactive
 - **Multiple solutions** — pick one with `s`; the choice is remembered per working directory
   in `stdpath("state")/dotnet-tree/solutions.json`
 - **Auto refresh** on `DiagnosticChanged` and on writing `*.csproj`, `*.sln`, `*.slnx`,
@@ -134,11 +138,17 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 | `e` | edit the project's `.csproj` |
 | `a` | add package or project reference |
 | `n` | new file from template |
-| `b` / `B` | build project / build solution |
-| `c` / `C` | clean project / clean solution |
-| `r` | run project |
-| `t` | test project |
-| `w` | watch (run / test / build) |
+| `b` / `B` | build project / build solution — to the quickfix list |
+| `c` / `C` | clean project / clean solution — to the quickfix list |
+| `r` | run project — in a terminal split |
+| `t` | test project — in a terminal split |
+| `w` | watch (run / test / build) — in a terminal split |
+
+A failed build fills the quickfix list and opens it; a successful one is a single
+message and no window. MSBuild prints every diagnostic twice, and once per target
+framework on a multi-targeted project — those copies are collapsed into one entry per
+source position. Lists made by other plugins are not overwritten: a build replaces the
+list it made itself, and otherwise pushes a new one.
 
 ## Configuration
 

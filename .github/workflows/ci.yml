@@ -64,6 +64,7 @@ jobs:
                   'dotnet-tree.store',
                   'dotnet-tree.git',
                   'dotnet-tree.tree',
+                  'dotnet-tree.build',
                   'dotnet-tree.commands',
                   'dotnet-tree.components',
                   'dotnet-tree.parser.solution',

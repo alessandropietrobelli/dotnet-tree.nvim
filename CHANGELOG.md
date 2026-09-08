@@ -9,6 +9,24 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+### Changed
+
+- `b`, `B`, `c` and `C` send their diagnostics to the quickfix list instead of
+  running in a `:terminal` split, so a failed build is a list you can jump
+  through rather than a buffer you have to read. `r`, `t` and `w` still open a
+  terminal, where their output is interactive. The quickfix window opens only
+  when the command failed; a successful build is a single message.
+
+### Added
+
+- `lua/dotnet-tree/build.lua`, with an errorformat that covers the diagnostics
+  MSBuild reports without a line and column. Neovim's bundled
+  `compiler/dotnet.vim` carries only `%E%f(%l\,%c): %trror %m`, which yields
+  zero quickfix entries for a restore failure such as `NU1101` — and a failed
+  restore masks compilation, so those errors are the only ones the user gets.
+  Duplicate entries are collapsed: MSBuild prints each diagnostic inline and
+  again under `Build FAILED.`, and once per target framework.
+
 ## [0.1.2] - 2026-08-18
 
 Documentation only. No plugin code changed between `v0.1.1` and `v0.1.2`.

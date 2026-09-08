@@ -362,13 +362,19 @@ function M.edit_project_file(state)
   vim.cmd("edit " .. vim.fn.fnameescape(node.extra.project.path))
 end
 
+-- build and clean go to the quickfix list; run, test and watch stay in the
+-- terminal, where their output is interactive. See dotnet-tree/build.lua.
+local function run_build(action, path)
+  require("dotnet-tree.build").build(path, { action = action })
+end
+
 function M.build(state)
   local node = find_project_node(state)
   if not node then
     vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
     return
   end
-  run_in_terminal("dotnet build " .. vim.fn.shellescape(node.extra.project.path))
+  run_build("build", node.extra.project.path)
 end
 
 function M.run_project(state)
@@ -385,7 +391,7 @@ function M.build_solution(state)
     vim.notify("[dotnet-tree] no solution loaded", vim.log.levels.WARN)
     return
   end
-  run_in_terminal("dotnet build " .. vim.fn.shellescape(state.dotnet_sln))
+  run_build("build", state.dotnet_sln)
 end
 
 function M.clean(state)
@@ -394,7 +400,7 @@ function M.clean(state)
     vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
     return
   end
-  run_in_terminal("dotnet clean " .. vim.fn.shellescape(node.extra.project.path))
+  run_build("clean", node.extra.project.path)
 end
 
 function M.clean_solution(state)
@@ -402,7 +408,7 @@ function M.clean_solution(state)
     vim.notify("[dotnet-tree] no solution loaded", vim.log.levels.WARN)
     return
   end
-  run_in_terminal("dotnet clean " .. vim.fn.shellescape(state.dotnet_sln))
+  run_build("clean", state.dotnet_sln)
 end
 
 function M.test(state)

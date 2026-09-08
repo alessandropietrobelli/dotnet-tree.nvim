@@ -80,6 +80,29 @@ The tree refreshes automatically on |DiagnosticChanged| and after writing
 `*.csproj`, `*.fsproj`, `*.vbproj`, `*.sln`, `*.slnx` or
 `Directory.Packages.props`.
 
+                                                        *dotnet-tree-quickfix*
+BUILD OUTPUT
+
+`b`, `B`, `c` and `C` send their diagnostics to the |quickfix| list, so a
+failed build is a list you can jump through with |:cnext| rather than a
+terminal buffer you have to read. The window opens only when the command
+failed; a successful build is a single message. Errors MSBuild reports without
+a line and column — a failed restore, a missing SDK, a bad import — are parsed
+too, and they matter: a failed restore stops compilation, so nothing else —
+no language server included — ever sees the compile errors underneath it.
+
+MSBuild prints every diagnostic twice, and once per target framework on a
+multi-targeted project. Those copies are collapsed into one entry per source
+position.
+
+`r`, `t` and `w` still open a terminal split, where their output is
+interactive.
+
+Other plugins' lists are left alone: a build replaces the list it created
+itself and otherwise pushes a new one, so |:colder| still reaches your
+previous |:grep|. If the build fails in a way the parser does not recognise,
+the raw output goes to the list verbatim rather than being dropped.
+
 ==============================================================================
 5. MAPPINGS                                         *dotnet-tree-mappings*
 
@@ -95,13 +118,15 @@ Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
   e                      edit the project's .csproj
   a                      add package or project reference
   n                      new file from template
-  b                      build project
-  B                      build solution
-  c                      clean project
-  C                      clean solution
-  r                      run project
-  t                      test project
-  w                      watch (run / test / build)
+  b                      build project        -> quickfix
+  B                      build solution       -> quickfix
+  c                      clean project        -> quickfix
+  C                      clean solution       -> quickfix
+  r                      run project          -> terminal
+  t                      test project         -> terminal
+  w                      watch (run / test / build)  -> terminal
+
+See |dotnet-tree-quickfix| for what the build actions do with their output.
 
 ==============================================================================
 6. CONFIGURATION                               *dotnet-tree-configuration*
