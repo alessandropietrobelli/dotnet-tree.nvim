@@ -1,0 +1,7 @@
+<Project>
+
+  <!-- The file name is a property reference, which only MSBuild can expand.
+       Not followed, and nothing is guessed: the framework stays unknown. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('$(SharedPropsFile)', '$(MSBuildThisFileDirectory)../'))" />
+
+</Project>

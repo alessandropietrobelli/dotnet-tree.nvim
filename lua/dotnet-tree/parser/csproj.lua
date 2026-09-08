@@ -74,12 +74,15 @@ function M.parse(csproj_path)
 
   -- A project that declares no framework of its own inherits it from the
   -- Directory.Build.props above it, so the cached parse is only good while
-  -- that file is unchanged too -- and while it is still the same file: a props
-  -- file added in a closer directory takes over.
-  local inherited, props_path, props_mtime = props.inherited_frameworks(dir)
+  -- every props file that was read is unchanged too -- and while they are
+  -- still the same files: a props file added in a closer directory takes over,
+  -- and one that chains upward (#30) makes the file above it load-bearing as
+  -- well. `props_stamp` covers the whole chain, which one path and one mtime
+  -- could not.
+  local inherited, props_stamp = props.inherited_frameworks(dir)
 
   local cached = cache[csproj_path]
-  if cached and cached.mtime == mtime and cached.props_path == props_path and cached.props_mtime == props_mtime then
+  if cached and cached.mtime == mtime and cached.props_stamp == props_stamp then
     return cached.data
   end
 
@@ -166,7 +169,7 @@ function M.parse(csproj_path)
     result.is_test_project = references_test_sdk(result.packages)
   end
 
-  cache[csproj_path] = { mtime = mtime, props_path = props_path, props_mtime = props_mtime, data = result }
+  cache[csproj_path] = { mtime = mtime, props_stamp = props_stamp, data = result }
   return result
 end
 

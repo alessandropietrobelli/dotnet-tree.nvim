@@ -1,0 +1,9 @@
+<Project>
+
+  <!-- Chains to the file above, which is silent about frameworks and chains
+       nowhere. The chain ends there: the net10.0 in tests/fixtures/props is
+       further up still, and following imports is not the same as walking to
+       the top of the tree. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+</Project>

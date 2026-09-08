@@ -158,6 +158,43 @@ describe("parser.csproj", function()
     assert.are.same({}, result.target_frameworks)
   end)
 
+  -- #30, found on a real multi-project solution and not on a fixture. A
+  -- repository that wants different rules under src/ and tests/ puts a
+  -- Directory.Build.props in each and chains it to the root one with
+  -- GetPathOfFileAbove. The nearest file then names no framework at all, so
+  -- stopping at it -- which is what #23 shipped -- reported none for every
+  -- project under src/, on the most ordinary layout there is.
+  it("follows a props file that only imports the one above it", function()
+    local result = csproj.parse(FIXTURES .. "/props/chain/src/Api/Api.csproj")
+    assert.are.same({ "net9.0" }, result.target_frameworks)
+  end)
+
+  -- Same import order as the project body: MSBuild imports the file above
+  -- before reading the rest of the importing file, so a framework written in
+  -- the importing props file wins over the imported one.
+  it("prefers the importing props file's own framework over the imported one", function()
+    local result = csproj.parse(FIXTURES .. "/props/chain/own/Lib/Lib.csproj")
+    assert.are.same({ "net8.0" }, result.target_frameworks)
+  end)
+
+  -- The chain follows imports; it does not walk to the top of the tree. Here
+  -- the nearest file imports the one above it, that one is silent and imports
+  -- nothing, and the net10.0 in fixtures/props is further up still -- so the
+  -- answer is unknown rather than net10.0.
+  it("ends the chain at a props file that imports nothing", function()
+    local result = csproj.parse(FIXTURES .. "/props/silent/nested/Quiet.csproj")
+    assert.are.same({}, result.target_frameworks)
+  end)
+
+  -- The scope boundary on the import itself. Only a literal
+  -- `Directory.Build.props` file name argument is resolved: a path built out
+  -- of a property is MSBuild's to expand, so the import is not followed and
+  -- nothing is invented in its place.
+  it("does not follow an import whose file name is a property reference", function()
+    local result = csproj.parse(FIXTURES .. "/props/chain/unresolved/Lib/Lib.csproj")
+    assert.are.same({}, result.target_frameworks)
+  end)
+
   -- #16. An action that launches a project needs two things the parser did not
   -- read: whether the project produces something runnable, and what the output
   -- file is called. Without OutputType a launcher happily targets a library,
@@ -353,6 +390,59 @@ describe("parser.props", function()
 
   it("stops at stop_dir instead of climbing out of the solution", function()
     assert.is_nil(props.find_up(FIXTURES .. "/props/nested", "Nope.props", FIXTURES .. "/props"))
+  end)
+
+  -- The stamp is what a caller caches against. It has to name every props file
+  -- the walk actually read, not just the nearest one: with a chain (#30) the
+  -- file above is load-bearing too, and a stamp covering only the nearest file
+  -- would be right on the first parse and stale for the rest of the session.
+  it("stamps every props file in the chain, not only the nearest", function()
+    local _, stamp = props.inherited_frameworks(FIXTURES .. "/props/chain/src/Api")
+    assert.is_not_nil(stamp)
+    local files = {}
+    for path in stamp:gmatch("([^|@]+)@%d+") do
+      table.insert(files, path)
+    end
+    assert.are.same({
+      FIXTURES .. "/props/chain/src/Directory.Build.props",
+      FIXTURES .. "/props/chain/Directory.Build.props",
+    }, files)
+  end)
+
+  -- And the caller has to notice. Touching the *top* of the chain changes the
+  -- framework a project inherits, and the csproj itself has not changed, so a
+  -- cache keyed on the project alone -- or on the nearest props file alone --
+  -- keeps serving the old answer. mtime is set explicitly rather than by
+  -- writing twice: whole-second resolution makes two writes in one second
+  -- indistinguishable.
+  it("re-parses a project when the top of the props chain changes", function()
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root .. "/src/Api", "p")
+    local top = root .. "/Directory.Build.props"
+    local function write_top(tfm, mtime)
+      local f = assert(io.open(top, "w"))
+      f:write("<Project><PropertyGroup><TargetFramework>" .. tfm .. "</TargetFramework></PropertyGroup></Project>")
+      f:close()
+      vim.uv.fs_utime(top, mtime, mtime)
+    end
+    local mid = assert(io.open(root .. "/src/Directory.Build.props", "w"))
+    mid:write(
+      [[<Project><Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', ']]
+        .. [[$(MSBuildThisFileDirectory)../'))" /></Project>]]
+    )
+    mid:close()
+    local project = root .. "/src/Api/Api.csproj"
+    local pf = assert(io.open(project, "w"))
+    pf:write('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup /></Project>')
+    pf:close()
+
+    write_top("net9.0", 1000000)
+    assert.are.same({ "net9.0" }, csproj.parse(project).target_frameworks)
+
+    write_top("net10.0", 2000000)
+    assert.are.same({ "net10.0" }, csproj.parse(project).target_frameworks)
+
+    vim.fn.delete(root, "rf")
   end)
 end)
 
