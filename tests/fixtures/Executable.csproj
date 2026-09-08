@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Declared a library first and made executable further down: MSBuild takes
+       the last unconditional assignment, not the first. -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>dotnet-tool-probe</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <!-- Conditional on something we cannot evaluate, on the group and on the
+       property. Neither may win: guessing here renames the output assembly and
+       sends a launcher at a file that is not there. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <AssemblyName>never-this-one</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <AssemblyName Condition="'$(CI)' == 'true'">never-this-one-either</AssemblyName>
+  </PropertyGroup>
+
+</Project>

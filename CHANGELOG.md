@@ -35,6 +35,18 @@ mappings may land in a minor release; they will always be listed here.
   Duplicate entries are collapsed: MSBuild prints each diagnostic inline and
   again under `Build FAILED.`, and once per target framework.
 
+- The `.csproj` reader now returns `output_type` and `assembly_name`, the two
+  properties an action needs before it can point at a project's build output:
+  without the first, a launcher targets a library that has no entry point and
+  the failure arrives as an opaque runtime error; without the second, the guess
+  that the output is named after the project file is silently wrong for every
+  project that overrides it. Both are `nil` when the project does not say, and
+  the defaults — output type `Library`, assembly name = the project file's
+  basename — are left to the caller. A value declared only under a `Condition`
+  reads as `nil` rather than being guessed at, and a value written as
+  `$(Property)` comes back verbatim: reading XML is not evaluating MSBuild.
+  ([#16](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/16))
+
 ### Fixed
 
 - A package that declares its version as a `<Version>` child element instead of

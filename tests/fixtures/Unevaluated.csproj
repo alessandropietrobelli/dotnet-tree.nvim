@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Both properties are written as MSBuild property references. Reading XML
+       does not resolve them; the parser hands them over as written and the
+       caller has to notice it cannot use them. -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>$(DefaultOutputType)</OutputType>
+    <AssemblyName>$(MSBuildProjectName).Tool</AssemblyName>
+  </PropertyGroup>
+</Project>
