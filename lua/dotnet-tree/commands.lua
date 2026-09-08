@@ -420,6 +420,18 @@ function M.test(state)
   run_in_terminal("dotnet test " .. vim.fn.shellescape(node.extra.project.path))
 end
 
+-- `d`: build the project under the cursor, then start netcoredbg on what it
+-- built. Both nvim-dap and netcoredbg are optional; dotnet-tree/debug.lua says
+-- so rather than raising when they are missing.
+function M.debug(state)
+  local node = find_project_node(state)
+  if not node then
+    vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
+    return
+  end
+  require("dotnet-tree.debug").debug(node.extra.project.path)
+end
+
 function M.watch(state)
   local node = find_project_node(state)
   if not node then

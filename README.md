@@ -36,6 +36,9 @@ This source renders that graph.
   opened, and project rows carry the error and warning counts underneath them
 - **dotnet CLI actions** on the node under the cursor: build, clean, run, test, watch, add
   package / project reference, new file from template (with namespace inferred from the folder)
+- **Debug the project under the cursor** with `d`: it builds first, then starts netcoredbg
+  through nvim-dap on that project's own assembly — no prompt asking which project, and no
+  stale binary, because a failed build stops the launch and shows the compiler errors instead
 - **Build errors in the quickfix list**, deduplicated and jumpable — including the ones no
   language server can see, such as a failed restore, which stops compilation before any
   compiler error is reported. `run`, `test` and `watch` stay in a terminal, where their
@@ -51,6 +54,15 @@ This source renders that graph.
 - [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) — this plugin is a neo-tree
   source, not a standalone tree
 - The `dotnet` CLI on your `PATH` (only needed for the build/run/test/watch/add actions)
+
+Optional, and only for `d` (debug project):
+
+- [nvim-dap](https://github.com/mfussenegger/nvim-dap)
+- [netcoredbg](https://github.com/Samsung/netcoredbg) on your `PATH`, or installed with
+  mason (`:MasonInstall netcoredbg`)
+
+Without them the tree works exactly as before; `d` says what is missing, and
+`:checkhealth dotnet-tree` names it.
 
 ## Installation
 
@@ -141,8 +153,17 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 | `b` / `B` | build project / build solution — to the quickfix list |
 | `c` / `C` | clean project / clean solution — to the quickfix list |
 | `r` | run project — in a terminal split |
+| `d` | debug project — builds first, then netcoredbg via nvim-dap |
 | `t` | test project — in a terminal split |
 | `w` | watch (run / test / build) — in a terminal split |
+
+`d` resolves the project's own output — `OutputType` decides whether there is anything to
+launch, `AssemblyName` decides what the file is called — builds it, and starts netcoredbg on
+`bin/Debug/<tfm>/<assembly>.dll`. A library is refused with the reason rather than launched;
+a multi-targeted project asks which framework; a failed build leaves the quickfix list on
+screen and never starts the debugger. If a project file declares no `TargetFramework` (it
+often lives in `Directory.Build.props`), the framework is taken from what the build put under
+`bin/Debug/`.
 
 A failed build fills the quickfix list and opens it; a successful one is a single
 message and no window. MSBuild prints every diagnostic twice, and once per target

@@ -31,6 +31,7 @@ tree plugin. See |dotnet-tree-installation|.
   - Neovim >= 0.9
   - neo-tree.nvim              https://github.com/nvim-neo-tree/neo-tree.nvim
   - the `dotnet` CLI on $PATH, for the build/run/test/watch/add actions only
+  - optional, for `d` only: nvim-dap, and netcoredbg on $PATH or in mason
 
 ==============================================================================
 3. INSTALLATION                                 *dotnet-tree-installation*
@@ -103,6 +104,46 @@ itself and otherwise pushes a new one, so |:colder| still reaches your
 previous |:grep|. If the build fails in a way the parser does not recognise,
 the raw output goes to the list verbatim rather than being dropped.
 
+                                                           *dotnet-tree-debug*
+DEBUGGING
+
+`d` debugs the project under the cursor. It resolves that project's own
+output, builds it, and starts netcoredbg on the assembly the build produced:
+
+  OutputType     decides whether there is an entry point to launch at all
+  AssemblyName   decides what the produced file is called
+  TargetFramework  decides which bin/Debug/<tfm>/ the assembly is in
+
+Both dependencies are optional and are checked before anything else happens:
+
+  nvim-dap       https://github.com/mfussenegger/nvim-dap
+  netcoredbg     on $PATH, or installed with mason
+
+Neither is required for the rest of the plugin, and their absence is a message
+plus a |:checkhealth-dotnet-tree| entry, never an error inside the tree.
+
+What `d` refuses, and why it says so instead of launching:
+
+  a library                 no entry point; the runtime error you would get
+                            instead says nothing about the real problem
+  OutputType `$(Property)`  only MSBuild can resolve it, and guessing "Exe"
+                            produces exactly that opaque error
+  AssemblyName `$(...)`     the output path cannot be composed from it
+  a failed build            the quickfix list stays on screen with the
+                            compiler errors; no debugger is started
+
+Building first is not politeness: without it the debugger attaches to whatever
+the previous build left behind, and you end up stepping through code that is
+not the code on screen.
+
+A multi-targeted project asks which framework to debug. A project that
+declares no `TargetFramework` — it often comes from `Directory.Build.props`,
+which this parser does not follow — is resolved from what the build actually
+put under `bin/Debug/`.
+
+The `coreclr` adapter is registered with nvim-dap only if you have not
+configured one yourself: an adapter you set up wins.
+
 ==============================================================================
 5. MAPPINGS                                         *dotnet-tree-mappings*
 
@@ -123,10 +164,12 @@ Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
   c                      clean project        -> quickfix
   C                      clean solution       -> quickfix
   r                      run project          -> terminal
+  d                      debug project        -> nvim-dap
   t                      test project         -> terminal
   w                      watch (run / test / build)  -> terminal
 
-See |dotnet-tree-quickfix| for what the build actions do with their output.
+See |dotnet-tree-quickfix| for what the build actions do with their output,
+and |dotnet-tree-debug| for `d`.
 
 ==============================================================================
 6. CONFIGURATION                               *dotnet-tree-configuration*
@@ -157,6 +200,10 @@ Configure it as a neo-tree source. The table is merged over
 Verifies the Neovim version, that neo-tree is installed, that "dotnet-tree" is
 registered in neo-tree's sources, that `dotnet` is executable, and which
 solutions are discoverable from the current working directory.
+
+It also reports whether debugging is available — nvim-dap installed and
+netcoredbg found — as a warning rather than an error: only `d` needs them.
+See |dotnet-tree-debug|.
 
 ==============================================================================
 8. TROUBLESHOOTING                           *dotnet-tree-troubleshooting*
