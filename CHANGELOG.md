@@ -27,6 +27,19 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Added
 
+- `d` on a project builds it and then starts netcoredbg on what it built,
+  through nvim-dap. The debugger is the usual reason to leave Neovim for an
+  IDE, and the gesture is the one the tree is built around: cursor on a
+  project, one key, no prompt asking which project. The launch is refused with
+  the reason rather than attempted when the project is a library, when
+  `OutputType` or `AssemblyName` is an MSBuild property this parser cannot
+  evaluate, or when the build fails — in which case the quickfix list with the
+  compiler errors is what stays on screen. A multi-targeted project asks which
+  framework; a project that declares none is resolved from what the build put
+  under `bin/Debug/`. nvim-dap and netcoredbg are both optional: without them
+  `d` says what is missing and `:checkhealth dotnet-tree` names it.
+  ([#18](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/18))
+
 - `lua/dotnet-tree/build.lua`, with an errorformat that covers the diagnostics
   MSBuild reports without a line and column. Neovim's bundled
   `compiler/dotnet.vim` carries only `%E%f(%l\,%c): %trror %m`, which yields

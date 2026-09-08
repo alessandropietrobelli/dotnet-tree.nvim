@@ -62,6 +62,26 @@ function M.check()
     })
   end
 
+  -- Optional integrations. `d` is the only thing that needs them, and it says
+  -- so on the keypress too; neither absence is an error for the tree itself.
+  local debug_mod = require("dotnet-tree.debug")
+  local has_dap = debug_mod.has_dap()
+  local debugger = debug_mod.debugger_path()
+
+  if has_dap and debugger then
+    ok("debugging available (nvim-dap + " .. debugger .. ")")
+  else
+    local advice = {}
+    if not has_dap then
+      table.insert(advice, "Install mfussenegger/nvim-dap.")
+    end
+    if not debugger then
+      table.insert(advice, "Install netcoredbg (`:MasonInstall netcoredbg`, or put it on PATH).")
+    end
+    table.insert(advice, "Everything else works without them; only `d` (debug project) needs both.")
+    warn("debugging not available: " .. (has_dap and "netcoredbg not found" or "nvim-dap not installed"), advice)
+  end
+
   local cwd = vim.fn.getcwd()
   local solutions = require("dotnet-tree.parser.solution").find(cwd)
   if #solutions > 0 then

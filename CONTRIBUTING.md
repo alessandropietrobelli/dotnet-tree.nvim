@@ -66,6 +66,7 @@ If it stops you, edit whichever file it names rather than relaxing the check.
 | `lua/dotnet-tree/init.lua` | the neo-tree source: `default_config`, `setup`, `navigate` |
 | `lua/dotnet-tree/tree.lua` | builds the node list from a parsed solution |
 | `lua/dotnet-tree/commands.lua` | window mappings and dotnet CLI actions |
+| `lua/dotnet-tree/debug.lua` | `d`: build, then netcoredbg through nvim-dap |
 | `lua/dotnet-tree/build.lua` | `dotnet build` / `clean` into the quickfix list |
 | `lua/dotnet-tree/components.lua` | renderer components |
 | `lua/dotnet-tree/git.lua` | git status per node |

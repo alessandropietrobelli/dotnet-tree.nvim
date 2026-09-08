@@ -25,6 +25,7 @@ M.default_config = {
       ["c"] = { "clean", desc = "[.NET] clean project" },
       ["C"] = { "clean_solution", desc = "[.NET] clean solution" },
       ["r"] = { "run_project", desc = "[.NET] run project" },
+      ["d"] = { "debug", desc = "[.NET] debug project" },
       ["t"] = { "test", desc = "[.NET] test project" },
       ["w"] = { "watch", desc = "[.NET] watch run/test/build" },
     },
