@@ -1,3 +1,5 @@
+local xml = require("dotnet-tree.parser.xml")
+
 local M = {}
 
 local cache = {}
@@ -54,7 +56,7 @@ function M.parse(csproj_path)
 
   -- PackageReference Include="X" Version="Y" (single line)
   local seen_pkg = {}
-  for tag in content:gmatch("<PackageReference%s(.-)>") do
+  for tag in xml.iter_tags(content, "PackageReference") do
     local include = tag:match('Include%s*=%s*"([^"]+)"')
     local version = tag:match('Version%s*=%s*"([^"]+)"')
     if include and not seen_pkg[include] then
@@ -71,11 +73,11 @@ function M.parse(csproj_path)
     end
   end
 
-  -- The attribute blob is captured with a non-greedy `.-` rather than a
-  -- negated class: `[^/>]` would stop at the first slash, which silently
-  -- dropped every reference written with forward slashes -- the normal style
-  -- in repositories authored on macOS or Linux.
-  for tag in content:gmatch("<ProjectReference%s(.-)>") do
+  -- Tag boundaries come from parser/xml.lua rather than a pattern: it walks
+  -- the text tracking quotes, so a literal '>' inside an attribute value -- the
+  -- usual shape of an MSBuild `Condition` -- no longer truncates the tag and
+  -- drops whatever attribute follows it.
+  for tag in xml.iter_tags(content, "ProjectReference") do
     local include = tag:match('Include%s*=%s*"([^"]+)"')
     if include then
       local norm = include:gsub("\\", "/")

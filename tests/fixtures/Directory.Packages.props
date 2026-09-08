@@ -8,6 +8,10 @@
     <!-- Pinned back for now: must not be reported as an effective version.
     <PackageVersion Include="Commented.Cpm" Version="9.9.9" />
     -->
+    <!-- The Include sits behind a literal '>', which is valid XML. This entry
+         used to be invisible, so a package pinned centrally showed no version
+         at all in the tree. -->
+    <PackageVersion Condition=" '$(N)' > '1' " Include="GtBefore.Cpm" Version="5.5.5" />
     <PackageVersion Include="Multi.Line.Cpm">
       <Version>7.7.7</Version>
     </PackageVersion>

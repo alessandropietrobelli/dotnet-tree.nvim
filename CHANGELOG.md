@@ -16,6 +16,11 @@ mappings may land in a minor release; they will always be listed here.
   through rather than a buffer you have to read. `r`, `t` and `w` still open a
   terminal, where their output is interactive. The quickfix window opens only
   when the command failed; a successful build is a single message.
+- The XML reading that `parser/slnx.lua` already did — quote-aware tag
+  boundaries, attribute parsing, entity unescaping — now lives in
+  `parser/xml.lua` and is shared with the `.csproj` and
+  `Directory.Packages.props` readers. No new parser was written: the `.slnx`
+  reader has handled this construct correctly since the first release.
 
 ### Added
 
@@ -26,6 +31,16 @@ mappings may land in a minor release; they will always be listed here.
   restore masks compilation, so those errors are the only ones the user gets.
   Duplicate entries are collapsed: MSBuild prints each diagnostic inline and
   again under `Build FAILED.`, and once per target framework.
+
+### Fixed
+
+- A literal `>` inside an attribute value no longer truncates a tag in
+  `.csproj` and `Directory.Packages.props`. That `>` is valid XML — XML 1.0
+  §2.4 forbids `<` and `&` in an attribute value, not `>` — and MSBuild builds
+  such a project without a warning, so a project reference or a package whose
+  `Include` sat behind an MSBuild `Condition` disappeared from the tree with no
+  error at all. Both attribute orders now read the same.
+  ([#10](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/10))
 
 ## [0.1.2] - 2026-08-18
 
@@ -144,7 +159,8 @@ projects.
   degradation on malformed input. `parser/slnx.lua` already handles the same
   construct correctly (`find_tag_end`, `slnx.lua:86-103`). The rest of the file
   still scans correctly. Asserted in the tests as current behaviour. Tracked in
-  [#10](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/10).
+  [#10](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/10),
+  and fixed after `0.1.2` — see Unreleased.
 
 [Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.2...HEAD
 [0.1.2]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.1...v0.1.2

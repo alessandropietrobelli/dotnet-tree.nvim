@@ -103,30 +103,36 @@ describe("parser.csproj", function()
     assert.is_nil(csproj.parse(FIXTURES .. "/DoesNotExist.csproj"))
   end)
 
-  -- The tag scanner reads up to the first '>' regardless of quoting, so a
-  -- literal '>' inside an attribute value truncates the tag. That '>' is valid
-  -- XML -- XML 1.0 section 2.4 forbids '<' and '&' in attribute values, not
-  -- '>' -- and MSBuild builds such a project without a warning, so this is a
-  -- defect rather than graceful degradation on malformed input: the reference
-  -- is dropped silently and the two attribute orderings differ. slnx.lua
-  -- handles the same construct correctly (find_tag_end). Pinned as current
-  -- behaviour, not as desired behaviour; tracked in issue #10.
-  it("degrades predictably on a literal > inside an attribute", function()
+  -- Regression for #10. A literal '>' inside an attribute value is valid XML
+  -- -- XML 1.0 section 2.4 forbids '<' and '&' there, not '>' -- and MSBuild
+  -- builds such a project without a warning. The old tag scanner read up to the
+  -- first '>' regardless of quoting, so it truncated the tag: when the Include
+  -- followed the offending attribute the reference was dropped with no error.
+  -- Tag boundaries now come from parser/xml.lua, which tracks quoting.
+  it("reads references whose Include sits behind a literal > in an attribute", function()
     local result = csproj.parse(FIXTURES .. "/EdgeCases.csproj")
     local seen = {}
     for _, ref in ipairs(result.project_references) do
       seen[vim.fn.fnamemodify(ref.path, ":t")] = true
     end
 
-    -- Escaped as &gt;: read, whatever the attribute order.
+    -- Escaped as &gt;, and literal '>' in either attribute order: all read.
     assert.is_true(seen["Escaped.csproj"] == true)
-    -- Literal '>', but the Include comes first, so it has already been read.
     assert.is_true(seen["GtAfter.csproj"] == true)
-    -- Literal '>' and the Include comes after it: the reference is lost.
-    assert.is_nil(seen["GtBefore.csproj"])
-    -- A later, well-formed entry is unaffected: one bad tag does not
+    assert.is_true(seen["GtBefore.csproj"] == true, "reference behind a literal > was dropped")
+    -- A later, well-formed entry is unaffected: one such tag does not
     -- desynchronise the rest of the file.
     assert.is_true(seen["Live.csproj"] == true)
+  end)
+
+  it("reads a package whose Include and Version both sit behind a literal >", function()
+    local result = csproj.parse(FIXTURES .. "/EdgeCases.csproj")
+    local by_name = {}
+    for _, pkg in ipairs(result.packages) do
+      by_name[pkg.name] = pkg.version
+    end
+    assert.are.equal("1.2.3", by_name["GtBefore.Package"])
+    assert.are.equal("2.0.0", by_name["Live.Package"])
   end)
 
   -- Regression: comments used to be scanned like any other markup, so a
@@ -176,6 +182,14 @@ describe("parser.cpm", function()
     local versions = cpm.parse(FIXTURES .. "/Directory.Packages.props")
     assert.is_nil(versions["Commented.Cpm"])
     assert.are.equal("4.0.0", versions["Serilog"])
+  end)
+
+  -- Same regression as the csproj side (#10): the props reader used the same
+  -- truncating tag scanner, so a centrally pinned version behind a literal '>'
+  -- was invisible and the tree showed no version for that package.
+  it("reads a version whose Include sits behind a literal > in an attribute", function()
+    local versions = cpm.parse(FIXTURES .. "/Directory.Packages.props")
+    assert.are.equal("5.5.5", versions["GtBefore.Cpm"])
   end)
 
   -- Same known defect as the csproj side: the multi-line pattern starts at the
