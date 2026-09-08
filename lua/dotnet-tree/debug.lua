@@ -59,9 +59,18 @@ local function is_unevaluated(value)
   return value ~= nil and value:find("$(", 1, true) ~= nil
 end
 
--- MSBuild's default when a project says nothing is Library, and Library is the
--- one answer that means "do not launch this".
+-- The two OutputType values that mean "there is a process to start". Library is
+-- the one answer that means "do not launch this".
 local RUNNABLE = { exe = true, winexe = true }
+
+-- Blazor WebAssembly builds an Exe -- MSBuild says so -- but the assembly runs
+-- in the browser's runtime, not as a process: `dotnet App.dll` on one fails in
+-- the host with "the library 'libhostpolicy' required to execute the
+-- application was not found", which tells the reader nothing. netcoredbg cannot
+-- launch it either; debugging it is the browser's job.
+local function is_blazor_wasm(sdk)
+  return sdk ~= nil and sdk:lower():find("microsoft.net.sdk.blazorwebassembly", 1, true) ~= nil
+end
 
 --- Everything needed to launch a project, or a reason why it cannot be.
 ---
@@ -89,7 +98,11 @@ function M.resolve(project_path)
       )
   end
 
-  local kind = (output_type or "Library"):lower()
+  -- What the project does not declare, its SDK decides: an ASP.NET Core project
+  -- carries no `<OutputType>` and is still an application, and refusing it as a
+  -- library was wrong about the only thing this function is for.
+  local default_type = csproj.default_output_type(project.sdk)
+  local kind = (output_type or default_type):lower()
   if not RUNNABLE[kind] then
     -- A test project that is not runnable is not the same story as a library,
     -- and saying "this is a library" sends the reader looking for a bug that is
@@ -101,7 +114,14 @@ function M.resolve(project_path)
         ("%s is a test project that builds a library: nothing to launch, use `t` or neotest-dotnet"):format(name)
     end
     return nil,
-      ("%s is a library (OutputType %s) and has no entry point"):format(name, output_type or "Library, by default")
+      ("%s is a library (OutputType %s) and has no entry point"):format(
+        name,
+        output_type or ("%s, the %s default"):format(default_type, project.sdk or "Microsoft.NET.Sdk")
+      )
+  end
+
+  if is_blazor_wasm(project.sdk) then
+    return nil, ("%s is a Blazor WebAssembly app: it runs in the browser, and netcoredbg cannot launch it"):format(name)
   end
 
   local assembly_name = project.assembly_name

@@ -1,0 +1,9 @@
+<!-- MSBuild reports OutputType Exe for this SDK, but the assembly runs in the
+     browser: it cannot be started as a process. -->
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

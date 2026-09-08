@@ -63,6 +63,61 @@ local function references_test_sdk(packages)
   return false
 end
 
+-- MSBuild has no single default for `OutputType`: the SDK the project imports
+-- decides it. A project that declares nothing is a library under
+-- `Microsoft.NET.Sdk`, and an application under the Web and Worker SDKs, which
+-- is why an ASP.NET Core project has no `<OutputType>` in it and still builds
+-- something you can run.
+--
+-- Measured with `dotnet msbuild -getProperty:OutputType` on the templates, SDK
+-- 10.0.302: webapi and mvc (`.Web`) -> Exe, worker (`.Worker`) -> Exe,
+-- blazorwasm (`.BlazorWebAssembly`) -> exe, razorclasslib (`.Razor`) ->
+-- Library, classlib (`Microsoft.NET.Sdk`) -> Library.
+local SDK_OUTPUT_TYPE = {
+  ["microsoft.net.sdk.web"] = "Exe",
+  ["microsoft.net.sdk.worker"] = "Exe",
+  ["microsoft.net.sdk.blazorwebassembly"] = "Exe",
+}
+
+--- What `OutputType` means for a project that does not declare one.
+---
+--- Kept here rather than in the caller because it is a fact about MSBuild, the
+--- same as the rest of this file; what to *do* with it is still the caller's.
+---@param sdk string|nil the project's Sdk attribute, as written
+---@return string output_type "Exe" or "Library"
+function M.default_output_type(sdk)
+  if sdk then
+    -- An Sdk attribute may name several SDKs, separated by semicolons, and
+    -- each may carry a version after a slash.
+    for name in sdk:gmatch("[^;]+") do
+      local bare = name:gsub("/.*$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+      local declared = SDK_OUTPUT_TYPE[bare:lower()]
+      if declared then
+        return declared
+      end
+    end
+  end
+  return "Library"
+end
+
+-- The SDK the project imports, as written: the `Sdk` attribute on `<Project>`,
+-- or the `<Sdk Name="..."/>` element form. Legacy non-SDK projects have
+-- neither and read nil.
+local function read_sdk(root)
+  local project = xml.find_all(root, "Project")[1]
+  local attr = project and xml.attr_ci(project.attrs, "Sdk")
+  if attr then
+    return attr
+  end
+  for _, node in ipairs(xml.find_all(root, "Sdk")) do
+    local name = xml.attr_ci(node.attrs, "Name")
+    if name then
+      return name
+    end
+  end
+  return nil
+end
+
 function M.parse(csproj_path)
   csproj_path = vim.fs.normalize(csproj_path)
   local stat = vim.uv.fs_stat(csproj_path)
@@ -126,6 +181,10 @@ function M.parse(csproj_path)
   -- basename, and the caller is the one that knows which it is looking at.
   result.output_type = read_property(root, "OutputType")
   result.assembly_name = read_property(root, "AssemblyName")
+
+  -- The SDK is what makes `output_type == nil` readable: nil means "the project
+  -- did not say", and only the SDK says what that amounts to.
+  result.sdk = read_sdk(root)
 
   -- A PackageReference declares its version either as a `Version` attribute or
   -- as a `<Version>` child element; MSBuild accepts both and repositories

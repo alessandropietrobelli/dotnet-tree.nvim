@@ -1,0 +1,9 @@
+<!-- A Razor class library is still a library: the SDK name is not the signal,
+     the SDK's own default is. -->
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

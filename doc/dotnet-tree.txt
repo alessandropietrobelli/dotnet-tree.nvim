@@ -110,7 +110,10 @@ DEBUGGING
 `d` debugs the project under the cursor. It resolves that project's own
 output, builds it, and starts netcoredbg on the assembly the build produced:
 
-  OutputType     decides whether there is an entry point to launch at all
+  OutputType     decides whether there is an entry point to launch at all,
+                 and when the project declares none its SDK decides: the Web
+                 and Worker SDKs build applications, which is why an ASP.NET
+                 Core project never writes <OutputType>
   AssemblyName   decides what the produced file is called
   TargetFramework  decides which bin/Debug/<tfm>/ the assembly is in
 
@@ -129,6 +132,8 @@ What `d` refuses, and why it says so instead of launching:
   OutputType `$(Property)`  only MSBuild can resolve it, and guessing "Exe"
                             produces exactly that opaque error
   AssemblyName `$(...)`     the output path cannot be composed from it
+  a Blazor WebAssembly app  MSBuild calls it an Exe, but it runs in the
+                            browser; netcoredbg cannot start it
   a failed build            the quickfix list stays on screen with the
                             compiler errors; no debugger is started
 

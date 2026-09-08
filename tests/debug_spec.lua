@@ -123,6 +123,40 @@ describe("debug.resolve", function()
     csproj.invalidate()
   end)
 
+  -- The bug this pins: an ASP.NET Core project carries no `<OutputType>`,
+  -- because `Microsoft.NET.Sdk.Web` sets it. Read as a plain Library, `d`
+  -- refused to debug the single most common kind of .NET application there is.
+  it("launches a Web SDK project that declares no OutputType", function()
+    local target, reason = dbg.resolve(FIXTURES .. "/WebApi.csproj")
+    assert.is_nil(reason)
+    assert.is_truthy(target)
+    assert.are.equal("WebApi", target.assembly_name)
+  end)
+
+  it("launches a Worker SDK project named with an <Sdk> element", function()
+    local target = assert(dbg.resolve(FIXTURES .. "/WorkerSdkElement.csproj"))
+    assert.are.equal("WorkerSdkElement", target.assembly_name)
+  end)
+
+  it("still refuses a Razor class library, whose SDK defaults to Library", function()
+    local target, reason = dbg.resolve(FIXTURES .. "/RazorClassLib.csproj")
+    assert.is_nil(target)
+    assert.is_truthy(reason:find("library", 1, true), reason)
+    -- The message has to name where the default came from, or the reader goes
+    -- looking for an OutputType that was never written.
+    assert.is_truthy(reason:find("Microsoft.NET.Sdk.Razor", 1, true), reason)
+  end)
+
+  -- MSBuild reports Exe for this SDK, so OutputType alone would launch it --
+  -- and `dotnet App.dll` on a Blazor WebAssembly build dies in the host with a
+  -- libhostpolicy error that says nothing about the browser.
+  it("refuses a Blazor WebAssembly app, which is an Exe it cannot start", function()
+    local target, reason = dbg.resolve(FIXTURES .. "/BlazorWasm.csproj")
+    assert.is_nil(target)
+    assert.is_truthy(reason:find("browser", 1, true), reason)
+    assert.is_nil(reason:find("library", 1, true), reason)
+  end)
+
   it("refuses a project that produces a library", function()
     -- MultiTarget.csproj declares no OutputType at all, which in MSBuild means
     -- Library. Attaching a debugger to it fails inside the runtime with an
