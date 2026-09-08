@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- What `dotnet new xunit` produces on this SDK: xunit v2, and therefore a
+       library that the test host loads. There is no entry point to launch, so
+       `d` has nothing to do -- but calling it "a library" would send the reader
+       looking for a bug that is not there. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+  </ItemGroup>
+</Project>

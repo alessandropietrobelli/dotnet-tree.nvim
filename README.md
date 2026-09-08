@@ -166,12 +166,11 @@ often lives in `Directory.Build.props`), the framework is taken from what the bu
 `bin/Debug/`.
 
 A test project is a runnable assembly too — xunit v3 test projects declare
-`<OutputType>Exe</OutputType>` — so `d` will debug one and offer it like any other
-application. That works, but the tree does not yet tell the two apart ([#24]).
-To debug a single test rather than the whole assembly, use
+`<OutputType>Exe</OutputType>` — so `d` debugs one rather than refusing it, and says that
+is what it is before launching: what you get is the whole test suite under the debugger.
+A project counts as a test project when it declares `<IsTestProject>` or references
+`Microsoft.NET.Test.Sdk`. To debug a single test rather than the whole assembly, use
 [neotest-dotnet](https://github.com/Issafalcon/neotest-dotnet).
-
-[#24]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/24
 
 A failed build fills the quickfix list and opens it; a successful one is a single
 message and no window. MSBuild prints every diagnostic twice, and once per target

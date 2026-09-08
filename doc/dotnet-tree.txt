@@ -142,8 +142,13 @@ which this parser does not follow — is resolved from what the build actually
 put under `bin/Debug/`.
 
 A test project is a runnable assembly too -- xunit v3 test projects declare
-`<OutputType>Exe</OutputType>` -- so `d` debugs one and presents it like any
-other application. That works, but the tree does not yet tell the two apart.
+`<OutputType>Exe</OutputType>` -- so `d` debugs one rather than refusing it,
+and says so before launching: what you get is the whole test suite under the
+debugger, and the dap session is named "(tests)". A project counts as a test
+project when it declares `<IsTestProject>` or references
+`Microsoft.NET.Test.Sdk`; an explicit `<IsTestProject>false</IsTestProject>`
+wins over the package, as it does in MSBuild.
+
 To debug a single test rather than the whole assembly, use neotest-dotnet:
 
   https://github.com/Issafalcon/neotest-dotnet

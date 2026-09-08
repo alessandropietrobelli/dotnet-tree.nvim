@@ -27,6 +27,19 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Added
 
+- The `.csproj` reader returns `is_test_project`, and `d` says so before it
+  debugs one. `OutputType` cannot answer that question: an xunit v3 test
+  project declares `Exe`, because v3 runs each test assembly as its own
+  process — all 16 test projects in the jellyfin checkout this was measured
+  against do — so a launcher keyed on `OutputType` alone offers every test
+  project in a solution as if it were an application. The signals are an
+  explicit `<IsTestProject>` and a `PackageReference` to
+  `Microsoft.NET.Test.Sdk`, with the property winning over the package as it
+  does in MSBuild. Debugging a test project is not refused, because running a
+  suite under the debugger is a real thing to want; it is named, in the message
+  and in the dap session.
+  ([#24](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/24))
+
 - `d` on a project builds it and then starts netcoredbg on what it built,
   through nvim-dap. The debugger is the usual reason to leave Neovim for an
   IDE, and the gesture is the one the tree is built around: cursor on a
