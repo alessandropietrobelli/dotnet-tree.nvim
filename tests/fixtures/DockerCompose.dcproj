@@ -1,0 +1,9 @@
+<!-- The Docker SDK sets OutputType to DockerCompose, which is neither Exe nor
+     Library: a refusal that calls it a library would be saying something false. -->
+<Project Sdk="Microsoft.Docker.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

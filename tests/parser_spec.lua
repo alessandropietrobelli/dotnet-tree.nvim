@@ -252,6 +252,37 @@ describe("parser.csproj", function()
     assert.is_false(csproj.parse(FIXTURES .. "/MultiTarget.csproj").is_test_project)
   end)
 
+  -- An ASP.NET Core project declares no OutputType and is still an
+  -- application: the Web SDK sets it. Reading "no OutputType" as "library" was
+  -- wrong about every web project there is.
+  --
+  -- The values below are what `dotnet msbuild -getProperty:OutputType` reports
+  -- for the templates on SDK 10.0.302, not what the SDK names suggest.
+  it("reads the SDK a project imports, in both forms it can be written", function()
+    assert.are.equal("Microsoft.NET.Sdk.Web", csproj.parse(FIXTURES .. "/WebApi.csproj").sdk)
+    assert.are.equal("Microsoft.NET.Sdk.Worker/1.0.0", csproj.parse(FIXTURES .. "/WorkerSdkElement.csproj").sdk)
+    -- Still nothing declared: the SDK answers for OutputType, it does not
+    -- replace it.
+    assert.is_nil(csproj.parse(FIXTURES .. "/WebApi.csproj").output_type)
+  end)
+
+  it("knows which SDKs default OutputType to an application", function()
+    assert.are.equal("Exe", csproj.default_output_type("Microsoft.NET.Sdk.Web"))
+    assert.are.equal("Exe", csproj.default_output_type("Microsoft.NET.Sdk.Worker/1.0.0"))
+    assert.are.equal("Exe", csproj.default_output_type("Microsoft.NET.Sdk.BlazorWebAssembly"))
+    -- Case is not significant to MSBuild, and several SDKs may be listed.
+    assert.are.equal("Exe", csproj.default_output_type("microsoft.net.sdk.web"))
+    assert.are.equal("Exe", csproj.default_output_type("Microsoft.NET.Sdk;Microsoft.NET.Sdk.Web"))
+  end)
+
+  it("leaves every other SDK at Library, which is what MSBuild does", function()
+    assert.are.equal("Library", csproj.default_output_type("Microsoft.NET.Sdk"))
+    assert.are.equal("Library", csproj.default_output_type("Microsoft.NET.Sdk.Razor"))
+    assert.are.equal("Library", csproj.default_output_type("Some.Third.Party.Sdk"))
+    -- A legacy project with no SDK at all.
+    assert.are.equal("Library", csproj.default_output_type(nil))
+  end)
+
   it("returns nil for a file that does not exist", function()
     assert.is_nil(csproj.parse(FIXTURES .. "/DoesNotExist.csproj"))
   end)

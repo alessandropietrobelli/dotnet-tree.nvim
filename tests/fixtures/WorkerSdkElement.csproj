@@ -1,0 +1,10 @@
+<!-- The other way to name an SDK, with a version attached: an <Sdk> element
+     rather than an attribute on <Project>. -->
+<Project>
+  <Sdk Name="Microsoft.NET.Sdk.Worker/1.0.0" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

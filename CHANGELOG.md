@@ -75,6 +75,14 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Fixed
 
+- `d` refused an ASP.NET Core project as a library. `OutputType` has no single
+  default in MSBuild: the SDK sets it, and `Microsoft.NET.Sdk.Web` and
+  `Microsoft.NET.Sdk.Worker` set `Exe`, which is why a web project never writes
+  `<OutputType>` and is still an application. The parser now reports the SDK a
+  project imports, and the default follows it. A Blazor WebAssembly app is an
+  `Exe` by that rule and is refused for its own reason: it runs in the browser,
+  where netcoredbg cannot start it.
+
 - A package that declares its version as a `<Version>` child element instead of
   an attribute now keeps that version in `.csproj`, and keeps it in
   `Directory.Packages.props` even when a self-closing entry is declared before

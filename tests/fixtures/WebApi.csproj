@@ -1,0 +1,10 @@
+<!-- What `dotnet new webapi` produces: the Web SDK sets OutputType to Exe, so
+     the project file never mentions it. -->
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
