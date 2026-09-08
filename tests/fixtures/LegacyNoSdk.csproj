@@ -1,0 +1,9 @@
+<!-- A pre-SDK project: no Sdk attribute at all, so there is no SDK whose
+     default could be named. -->
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+  </PropertyGroup>
+
+</Project>

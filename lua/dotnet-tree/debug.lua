@@ -116,7 +116,14 @@ function M.resolve(project_path)
     return nil,
       ("%s is a library (OutputType %s) and has no entry point"):format(
         name,
-        output_type or ("%s, the %s default"):format(default_type, project.sdk or "Microsoft.NET.Sdk")
+        -- Naming where an undeclared default came from saves the reader from
+        -- hunting for an OutputType nobody wrote -- but only an SDK-style
+        -- project has an SDK to name, and a project without one gets MSBuild's
+        -- own default instead of an SDK it never imported.
+        output_type
+          or (
+            project.sdk and ("%s, the %s default"):format(default_type, project.sdk) or (default_type .. ", by default")
+          )
       )
   end
 

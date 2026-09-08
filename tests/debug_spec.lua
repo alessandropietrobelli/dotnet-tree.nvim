@@ -147,6 +147,25 @@ describe("debug.resolve", function()
     assert.is_truthy(reason:find("Microsoft.NET.Sdk.Razor", 1, true), reason)
   end)
 
+  -- Every <OutputType> assignment in the SDKs on disk, not just the two that
+  -- mean "runnable": the Docker SDK sets DockerCompose. Refusing it is right;
+  -- telling its author it is a Library would not be.
+  it("does not call a DockerCompose project a library", function()
+    local target, reason = dbg.resolve(FIXTURES .. "/DockerCompose.dcproj")
+    assert.is_nil(target)
+    assert.is_truthy(reason:find("DockerCompose", 1, true), reason)
+    assert.is_nil(reason:find("Library", 1, true), reason)
+  end)
+
+  -- A project with no Sdk attribute has no SDK whose default could be named,
+  -- and naming one it never imported would be an invented fact.
+  it("does not attribute a default to an SDK a legacy project never imported", function()
+    local target, reason = dbg.resolve(FIXTURES .. "/LegacyNoSdk.csproj")
+    assert.is_nil(target)
+    assert.is_truthy(reason:find("library", 1, true), reason)
+    assert.is_nil(reason:find("Microsoft.NET.Sdk", 1, true), reason)
+  end)
+
   -- MSBuild reports Exe for this SDK, so OutputType alone would launch it --
   -- and `dotnet App.dll` on a Blazor WebAssembly build dies in the host with a
   -- libhostpolicy error that says nothing about the browser.

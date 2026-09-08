@@ -73,10 +73,16 @@ end
 -- 10.0.302: webapi and mvc (`.Web`) -> Exe, worker (`.Worker`) -> Exe,
 -- blazorwasm (`.BlazorWebAssembly`) -> exe, razorclasslib (`.Razor`) ->
 -- Library, classlib (`Microsoft.NET.Sdk`) -> Library.
+-- These are every `<OutputType>` assignment in the SDKs on disk (SDK 10.0.302),
+-- not a guess from the SDK names: Microsoft.NET.Sdk itself sets Library when
+-- nothing else did, and only four SDKs set anything at all.
 local SDK_OUTPUT_TYPE = {
   ["microsoft.net.sdk.web"] = "Exe",
   ["microsoft.net.sdk.worker"] = "Exe",
   ["microsoft.net.sdk.blazorwebassembly"] = "Exe",
+  -- Not runnable, and not a library either. Naming it keeps the refusal
+  -- message from telling a .dcproj it is a Library, which it is not.
+  ["microsoft.docker.sdk"] = "DockerCompose",
 }
 
 --- What `OutputType` means for a project that does not declare one.
