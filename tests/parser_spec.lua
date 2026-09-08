@@ -11,6 +11,7 @@ local FIXTURES = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h") .
 
 local csproj = require("dotnet-tree.parser.csproj")
 local cpm = require("dotnet-tree.parser.cpm")
+local props = require("dotnet-tree.parser.props")
 local solution = require("dotnet-tree.parser.solution")
 
 local function names_of(list, key)
@@ -25,6 +26,7 @@ end
 describe("parser.csproj", function()
   before_each(function()
     csproj.invalidate()
+    props.invalidate()
   end)
 
   it("reads project references written with either path separator", function()
@@ -101,6 +103,59 @@ describe("parser.csproj", function()
   it("reads both TargetFramework and TargetFrameworks", function()
     assert.are.same({ "net9.0" }, csproj.parse(FIXTURES .. "/PathStyles.csproj").target_frameworks)
     assert.are.same({ "net8.0", "net9.0" }, csproj.parse(FIXTURES .. "/MultiTarget.csproj").target_frameworks)
+  end)
+
+  -- #23, first cause. The framework was read with a pattern that required the
+  -- literal `<TargetFramework>` open tag, so an element carrying a `Condition`
+  -- -- the default-guard idiom, and the per-OS branch -- read as no framework
+  -- at all, with the value sitting in the file we were already parsing. Same
+  -- class of defect as #10: a text pattern assuming a shape MSBuild does not
+  -- promise. Frameworks are a list the tree displays, so a branch we cannot
+  -- evaluate is kept as a candidate rather than dropped.
+  it("reads a framework declared behind a Condition, on the element or on its group", function()
+    local result = csproj.parse(FIXTURES .. "/ConditionalFramework.csproj")
+    assert.are.same({ "net9.0", "net9.0-windows" }, result.target_frameworks)
+  end)
+
+  -- The other half of that rule: a conditional assignment is a candidate only
+  -- when nothing unconditional answers. A project that says net9.0 plainly is
+  -- not widened to net472 by a branch nobody asked for.
+  it("does not widen a plainly declared framework with a conditional branch", function()
+    local result = csproj.parse(FIXTURES .. "/ConditionalExtra.csproj")
+    assert.are.same({ "net9.0" }, result.target_frameworks)
+  end)
+
+  -- #23, second cause, and the measured one: 15 of jellyfin's 42 projects
+  -- declare no framework of their own and inherit it from the
+  -- Directory.Build.props that MSBuild imports implicitly. The parser read one
+  -- file and stopped, so a third of a real solution rendered with no framework
+  -- and no path to its build output.
+  it("inherits the framework from the nearest Directory.Build.props", function()
+    local result = csproj.parse(FIXTURES .. "/props/Inheriting.csproj")
+    assert.are.same({ "net10.0" }, result.target_frameworks)
+  end)
+
+  -- Import order: Directory.Build.props is imported above the project body, so
+  -- the project's own assignment is the one in force.
+  it("prefers the project's own framework over the inherited one", function()
+    local result = csproj.parse(FIXTURES .. "/props/OwnFramework.csproj")
+    assert.are.same({ "net8.0", "net9.0" }, result.target_frameworks)
+  end)
+
+  -- Nearest wins, which is also the stopping rule: the props file in the
+  -- project's own directory hides the one above it.
+  it("stops at the nearest props file rather than the topmost one", function()
+    local result = csproj.parse(FIXTURES .. "/props/nested/Nested.csproj")
+    assert.are.same({ "net8.0" }, result.target_frameworks)
+  end)
+
+  -- The scope boundary. This is a narrow walk, not MSBuild evaluation: a
+  -- framework written as a property reference stays unknown, and a props file
+  -- that says nothing about frameworks does not send us further up the tree
+  -- looking for one.
+  it("reports no framework when neither the project nor the props file names one", function()
+    local result = csproj.parse(FIXTURES .. "/props/silent/Unknown.csproj")
+    assert.are.same({}, result.target_frameworks)
   end)
 
   -- #16. An action that launches a project needs two things the parser did not
@@ -272,6 +327,32 @@ describe("parser.cpm", function()
 
   it("finds the props file by walking up from a directory", function()
     assert.are.equal(FIXTURES .. "/Directory.Packages.props", cpm.find_props(FIXTURES))
+  end)
+end)
+
+describe("parser.props", function()
+  before_each(function()
+    props.invalidate()
+  end)
+
+  -- The walk both implicitly imported MSBuild files share. `stop_dir` is what
+  -- keeps a lookup inside the solution instead of climbing out of it.
+  it("finds the nearest file, not the topmost one", function()
+    assert.are.equal(
+      FIXTURES .. "/props/nested/Directory.Build.props",
+      props.find_up(FIXTURES .. "/props/nested", "Directory.Build.props")
+    )
+  end)
+
+  it("keeps looking upward when the file is not in the starting directory", function()
+    assert.are.equal(
+      FIXTURES .. "/Directory.Packages.props",
+      props.find_up(FIXTURES .. "/props/nested", "Directory.Packages.props")
+    )
+  end)
+
+  it("stops at stop_dir instead of climbing out of the solution", function()
+    assert.is_nil(props.find_up(FIXTURES .. "/props/nested", "Nope.props", FIXTURES .. "/props"))
   end)
 end)
 

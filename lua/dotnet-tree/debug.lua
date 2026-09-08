@@ -132,9 +132,11 @@ end
 ---
 --- A project that declares nothing is not unusual: 15 of the 42 .csproj files
 --- in the jellyfin checkout this was measured against inherit their
---- TargetFramework from Directory.Build.props, which this parser does not
---- follow. Rather than refuse, fall back to what is actually on disk under
---- bin/<configuration>/ -- after a build that directory is the truth anyway.
+--- TargetFramework from Directory.Build.props. The parser now reads the
+--- nearest one (#23), so those 15 arrive here with a framework; what is left
+--- is what MSBuild alone can resolve, such as `$(DefaultTfm)`. Rather than
+--- refuse, fall back to what is actually on disk under bin/<configuration>/ --
+--- after a build that directory is the truth anyway.
 ---@param target table from M.resolve
 ---@return string[] frameworks
 function M.frameworks(target)

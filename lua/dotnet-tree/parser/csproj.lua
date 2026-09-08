@@ -1,3 +1,4 @@
+local props = require("dotnet-tree.parser.props")
 local xml = require("dotnet-tree.parser.xml")
 
 local M = {}
@@ -69,8 +70,16 @@ function M.parse(csproj_path)
     return nil
   end
   local mtime = stat.mtime.sec
+  local dir = vim.fn.fnamemodify(csproj_path, ":h")
+
+  -- A project that declares no framework of its own inherits it from the
+  -- Directory.Build.props above it, so the cached parse is only good while
+  -- that file is unchanged too -- and while it is still the same file: a props
+  -- file added in a closer directory takes over.
+  local inherited, props_path, props_mtime = props.inherited_frameworks(dir)
+
   local cached = cache[csproj_path]
-  if cached and cached.mtime == mtime then
+  if cached and cached.mtime == mtime and cached.props_path == props_path and cached.props_mtime == props_mtime then
     return cached.data
   end
 
@@ -88,23 +97,24 @@ function M.parse(csproj_path)
 
   local result = {
     path = csproj_path,
-    dir = vim.fn.fnamemodify(csproj_path, ":h"),
+    dir = dir,
     target_frameworks = {},
     packages = {},
     project_references = {},
     sdk_style = content:match("<Project%s+[^>]*Sdk=") ~= nil,
   }
 
-  for tf in content:gmatch("<TargetFramework>%s*([^<]-)%s*</TargetFramework>") do
-    table.insert(result.target_frameworks, tf)
-  end
-  for tfs in content:gmatch("<TargetFrameworks>%s*([^<]-)%s*</TargetFrameworks>") do
-    for tf in tfs:gmatch("([^;%s]+)") do
-      table.insert(result.target_frameworks, tf)
-    end
-  end
-
   local root = xml.parse(content)
+
+  -- What the project file itself says wins: MSBuild imports
+  -- Directory.Build.props above the project body, so a framework written here
+  -- overrides an inherited one. Nothing written here and nothing inherited
+  -- leaves the list empty -- unknown -- which is also what a `$(Property)`
+  -- reference gives, because expanding it is MSBuild's job.
+  result.target_frameworks = props.frameworks(root)
+  if #result.target_frameworks == 0 and inherited then
+    result.target_frameworks = inherited
+  end
 
   -- What an action needs before it can point at a project's build output:
   -- whether the project produces something runnable, and what the file is
@@ -156,7 +166,7 @@ function M.parse(csproj_path)
     result.is_test_project = references_test_sdk(result.packages)
   end
 
-  cache[csproj_path] = { mtime = mtime, data = result }
+  cache[csproj_path] = { mtime = mtime, props_path = props_path, props_mtime = props_mtime, data = result }
   return result
 end
 

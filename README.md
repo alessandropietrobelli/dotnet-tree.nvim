@@ -161,9 +161,10 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 launch, `AssemblyName` decides what the file is called — builds it, and starts netcoredbg on
 `bin/Debug/<tfm>/<assembly>.dll`. A library is refused with the reason rather than launched;
 a multi-targeted project asks which framework; a failed build leaves the quickfix list on
-screen and never starts the debugger. If a project file declares no `TargetFramework` (it
-often lives in `Directory.Build.props`), the framework is taken from what the build put under
-`bin/Debug/`.
+screen and never starts the debugger. A project that declares no `TargetFramework` of its own
+inherits it from the nearest `Directory.Build.props`, the way MSBuild does; if it is still
+unknown — a framework written as `$(SomeProperty)`, which only MSBuild can expand — the
+framework is taken from what the build put under `bin/Debug/`.
 
 A test project is a runnable assembly too — xunit v3 test projects declare
 `<OutputType>Exe</OutputType>` — so `d` debugs one rather than refusing it, and says that

@@ -1,0 +1,9 @@
+<Project>
+
+  <!-- A props file that says nothing about frameworks. The walk stops at the
+       nearest file: nothing further up is read, and nothing is invented. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
