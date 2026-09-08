@@ -83,6 +83,20 @@ mappings may land in a minor release; they will always be listed here.
   unreachable — nor the pattern that ran from the first `<PackageVersion` in a
   file to the first `</PackageVersion>` survives.
   ([#9](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/9))
+- `TargetFramework` is read in two shapes it used to miss, which together
+  accounted for 15 of the 42 projects in a jellyfin checkout rendering with no
+  framework at all. A project that declares none of its own now inherits it
+  from the nearest `Directory.Build.props` — the same upward walk, and the same
+  stopping rule, already used for `Directory.Packages.props` — and an element
+  carrying a `Condition`, such as the `<TargetFramework Condition="'$(TargetFramework)' == ''">`
+  default guard, is read from the element tree instead of being missed by a
+  pattern that required the bare open tag. MSBuild is still not evaluated: a
+  framework written as `$(DefaultTfm)` reads as unknown rather than as a guess,
+  an `Import` inside a props file is not followed, and no property other than
+  the two framework ones is inherited. A conditional branch is a candidate only
+  when nothing unconditional names a framework, so a project that answers
+  plainly is never widened by a branch we cannot decide.
+  ([#23](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/23))
 - A literal `>` inside an attribute value no longer truncates a tag in
   `.csproj` and `Directory.Packages.props`. That `>` is valid XML — XML 1.0
   §2.4 forbids `<` and `&` in an attribute value, not `>` — and MSBuild builds

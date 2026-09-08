@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The default-guard idiom, and a per-OS branch. Both write the framework
+       right here in the project file; neither is a literal <TargetFramework>
+       open tag, which is all the old text pattern could see. -->
+  <PropertyGroup>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net9.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <TargetFramework>net9.0-windows</TargetFramework>
+  </PropertyGroup>
+
+</Project>

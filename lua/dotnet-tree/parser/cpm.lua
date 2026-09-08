@@ -1,3 +1,4 @@
+local props = require("dotnet-tree.parser.props")
 local xml = require("dotnet-tree.parser.xml")
 
 local M = {}
@@ -51,26 +52,11 @@ function M.parse(props_path)
   return versions
 end
 
+-- Same upward walk as every other implicitly imported MSBuild file; it lives
+-- in parser/props.lua so the Directory.Build.props lookup and this one cannot
+-- drift apart.
 function M.find_props(start_dir, stop_dir)
-  local dir = vim.fs.normalize(start_dir)
-  stop_dir = stop_dir and vim.fs.normalize(stop_dir) or nil
-  local guard = 32
-  while dir and dir ~= "" and guard > 0 do
-    guard = guard - 1
-    local candidate = dir .. "/Directory.Packages.props"
-    if vim.fn.filereadable(candidate) == 1 then
-      return candidate
-    end
-    if stop_dir and dir == stop_dir then
-      break
-    end
-    local parent = vim.fn.fnamemodify(dir, ":h")
-    if parent == dir then
-      break
-    end
-    dir = parent
-  end
-  return nil
+  return props.find_up(start_dir, "Directory.Packages.props", stop_dir)
 end
 
 return M

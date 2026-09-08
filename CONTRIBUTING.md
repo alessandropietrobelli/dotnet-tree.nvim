@@ -13,11 +13,12 @@ Please include:
   Central Package Management (`Directory.Packages.props`)
 - The exact XML that renders wrong — the smallest fragment from the `.sln`,
   `.slnx`, `.csproj` or `Directory.Packages.props`, pasted verbatim and
-  sanitised. The `.csproj` and `.props` readers now read an element tree, but
-  they still do not evaluate MSBuild — a `$(Property)`, a `Condition` or a
-  value imported from `Directory.Build.props` comes back as written — and the
-  `.sln` reader is still line-based, so a retyped or reformatted fragment
-  usually hides the bug
+  sanitised. The `.csproj` and `.props` readers now read an element tree, and
+  `TargetFramework`/`TargetFrameworks` are also read from the nearest
+  `Directory.Build.props`, but MSBuild is still not evaluated — a
+  `$(Property)` comes back as written, a `Condition` is not decided, and no
+  other property is inherited — and the `.sln` reader is still line-based, so
+  a retyped or reformatted fragment usually hides the bug
 
 The [bug report form](.github/ISSUE_TEMPLATE/bug_report.yml) asks for all of
 this. Usage questions belong in
@@ -71,7 +72,7 @@ If it stops you, edit whichever file it names rather than relaxing the check.
 | `lua/dotnet-tree/components.lua` | renderer components |
 | `lua/dotnet-tree/git.lua` | git status per node |
 | `lua/dotnet-tree/store.lua` | remembers the selected solution per cwd |
-| `lua/dotnet-tree/parser/` | `sln`, `slnx`, `csproj`, `cpm`, the shared `xml` reader, and discovery |
+| `lua/dotnet-tree/parser/` | `sln`, `slnx`, `csproj`, `cpm`, `props` (the `Directory.Build.props` above a project), the shared `xml` reader, and discovery |
 | `lua/dotnet-tree/health.lua` | `:checkhealth dotnet-tree` |
 
 Parsers are the place where most contributions will land — the `.sln` and

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Says nothing about a framework: the shape of every project under
+       jellyfin's tests/, which inherits net10.0 from Directory.Build.props. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

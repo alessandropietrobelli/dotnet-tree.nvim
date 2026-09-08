@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+
+  <!-- A branch we cannot evaluate, next to an answer written plainly. -->
+  <PropertyGroup Condition="'$(BuildLegacy)' == 'true'">
+    <TargetFrameworks>net472;net48</TargetFrameworks>
+  </PropertyGroup>
+
+</Project>

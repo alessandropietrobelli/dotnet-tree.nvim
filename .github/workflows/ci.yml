@@ -73,6 +73,7 @@ jobs:
                   'dotnet-tree.parser.sln',
                   'dotnet-tree.parser.slnx',
                   'dotnet-tree.parser.csproj',
+                  'dotnet-tree.parser.props',
                   'dotnet-tree.parser.cpm',
                 }) do require(m) end print('all modules loaded')" \
             -c "qa!"

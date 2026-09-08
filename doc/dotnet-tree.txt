@@ -137,9 +137,10 @@ the previous build left behind, and you end up stepping through code that is
 not the code on screen.
 
 A multi-targeted project asks which framework to debug. A project that
-declares no `TargetFramework` — it often comes from `Directory.Build.props`,
-which this parser does not follow — is resolved from what the build actually
-put under `bin/Debug/`.
+declares no `TargetFramework` of its own inherits it from the nearest
+`Directory.Build.props`, as MSBuild does. When it is still unknown — a
+framework written as `$(SomeProperty)`, which only MSBuild can expand — it
+is resolved from what the build actually put under `bin/Debug/`.
 
 A test project is a runnable assembly too -- xunit v3 test projects declare
 `<OutputType>Exe</OutputType>` -- so `d` debugs one rather than refusing it,
