@@ -138,9 +138,11 @@ not the code on screen.
 
 A multi-targeted project asks which framework to debug. A project that
 declares no `TargetFramework` of its own inherits it from the nearest
-`Directory.Build.props`, as MSBuild does. When it is still unknown — a
-framework written as `$(SomeProperty)`, which only MSBuild can expand — it
-is resolved from what the build actually put under `bin/Debug/`.
+`Directory.Build.props`, as MSBuild does; when that file only chains to the
+one above it with `$([MSBuild]::GetPathOfFileAbove(...))` — the usual shape of
+a `src/Directory.Build.props` — the chain is followed. When the framework is
+still unknown — written as `$(SomeProperty)`, which only MSBuild can expand —
+it is resolved from what the build actually put under `bin/Debug/`.
 
 A test project is a runnable assembly too -- xunit v3 test projects declare
 `<OutputType>Exe</OutputType>` -- so `d` debugs one rather than refusing it,

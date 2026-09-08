@@ -1,0 +1,13 @@
+<Project>
+
+  <!-- The standard shape for a repository that wants different rules under
+       src/ and tests/: this file names no framework at all, it chains to the
+       one above with GetPathOfFileAbove (#30). Stopping here reports no
+       framework for every project underneath. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

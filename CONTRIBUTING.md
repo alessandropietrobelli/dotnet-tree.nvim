@@ -15,9 +15,11 @@ Please include:
   `.slnx`, `.csproj` or `Directory.Packages.props`, pasted verbatim and
   sanitised. The `.csproj` and `.props` readers now read an element tree, and
   `TargetFramework`/`TargetFrameworks` are also read from the nearest
-  `Directory.Build.props`, but MSBuild is still not evaluated — a
-  `$(Property)` comes back as written, a `Condition` is not decided, and no
-  other property is inherited — and the `.sln` reader is still line-based, so
+  `Directory.Build.props` and from the file it chains to with
+  `GetPathOfFileAbove`, but MSBuild is still not evaluated — a `$(Property)`
+  comes back as written, a `Condition` is not decided, no other `Import` is
+  followed, and no other property is inherited — and the `.sln` reader is
+  still line-based, so
   a retyped or reformatted fragment usually hides the bug
 
 The [bug report form](.github/ISSUE_TEMPLATE/bug_report.yml) asks for all of

@@ -1,0 +1,11 @@
+<Project>
+
+  <!-- Chains upward *and* names a framework. MSBuild imports the file above
+       before this body, so this value wins over the imported net9.0. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

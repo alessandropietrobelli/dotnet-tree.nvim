@@ -162,7 +162,9 @@ launch, `AssemblyName` decides what the file is called — builds it, and starts
 `bin/Debug/<tfm>/<assembly>.dll`. A library is refused with the reason rather than launched;
 a multi-targeted project asks which framework; a failed build leaves the quickfix list on
 screen and never starts the debugger. A project that declares no `TargetFramework` of its own
-inherits it from the nearest `Directory.Build.props`, the way MSBuild does; if it is still
+inherits it from the nearest `Directory.Build.props`, the way MSBuild does — and when that
+file only chains to the one above it with `$([MSBuild]::GetPathOfFileAbove(...))`, as a
+`src/Directory.Build.props` usually does, that chain is followed. If the framework is still
 unknown — a framework written as `$(SomeProperty)`, which only MSBuild can expand — the
 framework is taken from what the build put under `bin/Debug/`.
 
