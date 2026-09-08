@@ -132,6 +132,34 @@ describe("parser.csproj", function()
     assert.are.equal("$(MSBuildProjectName).Tool", result.assembly_name)
   end)
 
+  -- #24. `OutputType` answers "is there an entry point", which is not the same
+  -- question as "is this an application someone wants to launch": an xunit v3
+  -- test project declares Exe, because v3 runs each test assembly as its own
+  -- process. All 16 test projects in a jellyfin checkout do. Without a second
+  -- signal, anything keyed on OutputType alone offers every test project in a
+  -- solution as if it were an app.
+  it("recognises a test project by its Microsoft.NET.Test.Sdk reference", function()
+    local result = csproj.parse(FIXTURES .. "/TestProject.csproj")
+    assert.is_true(result.is_test_project)
+    -- The thing that made this necessary: it looks exactly like an app.
+    assert.are.equal("Exe", result.output_type)
+  end)
+
+  it("recognises a test project that declares IsTestProject itself", function()
+    assert.is_true(csproj.parse(FIXTURES .. "/TestProjectDeclared.csproj").is_test_project)
+  end)
+
+  -- MSBuild lets a project carrying the test SDK opt out, and shared test
+  -- infrastructure does exactly that. The explicit property wins.
+  it("believes an explicit IsTestProject false over the package reference", function()
+    assert.is_false(csproj.parse(FIXTURES .. "/TestProjectOptOut.csproj").is_test_project)
+  end)
+
+  it("does not call an ordinary application or a library a test project", function()
+    assert.is_false(csproj.parse(FIXTURES .. "/PlainExe.csproj").is_test_project)
+    assert.is_false(csproj.parse(FIXTURES .. "/MultiTarget.csproj").is_test_project)
+  end)
+
   it("returns nil for a file that does not exist", function()
     assert.is_nil(csproj.parse(FIXTURES .. "/DoesNotExist.csproj"))
   end)

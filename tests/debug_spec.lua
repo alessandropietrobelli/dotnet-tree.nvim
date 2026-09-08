@@ -91,14 +91,20 @@ local function scratch_project(name, tfms, opts)
   if opts.declare ~= false and tfms and #tfms > 0 then
     declared = ("    <TargetFrameworks>%s</TargetFrameworks>\n"):format(table.concat(tfms, ";"))
   end
+  local items = ""
+  if opts.test_project then
+    items = "  <ItemGroup>\n"
+      .. '    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />\n'
+      .. "  </ItemGroup>\n"
+  end
   local handle = assert(io.open(project, "w"))
   handle:write(([[
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
 %s  </PropertyGroup>
-</Project>
-]]):format(declared))
+%s</Project>
+]]):format(declared, items))
   handle:close()
 
   for _, tfm in ipairs(tfms or {}) do
@@ -125,6 +131,18 @@ describe("debug.resolve", function()
     assert.is_nil(target)
     assert.is_truthy(reason:find("library", 1, true), reason)
     assert.is_truthy(reason:find("MultiTarget.csproj", 1, true), reason)
+  end)
+
+  -- Only xunit v3 test projects are executables. `dotnet new xunit` on SDK
+  -- 10.0.302 still produces xunit v2, which builds a library the test host
+  -- loads -- so `d` genuinely cannot launch it. Saying "this is a library"
+  -- would be true and useless: it sends the reader looking for a missing
+  -- OutputType instead of to `t`.
+  it("tells a test project that builds a library apart from a plain library", function()
+    local target, reason = dbg.resolve(FIXTURES .. "/TestProjectLibrary.csproj")
+    assert.is_nil(target)
+    assert.is_truthy(reason:find("test project", 1, true), reason)
+    assert.is_truthy(reason:find("`t`", 1, true), reason)
   end)
 
   it("refuses an OutputType it cannot evaluate rather than assuming Exe", function()
@@ -272,6 +290,45 @@ describe("debug.debug", function()
       dbg.debug(project)
       assert.are.equal("/custom/dbg", package.loaded["dap"].adapters.coreclr.command)
     end)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- #24. A test project is a runnable assembly -- an xunit v3 one declares
+  -- OutputType Exe -- so debugging it is legitimate and is not refused. What it
+  -- must not do is present it as an application: pressing `d` and getting a
+  -- whole test suite under the debugger, with no word about it, is a surprise.
+  it("launches a test project, and says that is what it is", function()
+    local root, project = scratch_project("Suite", { "net9.0" }, { test_project = true })
+
+    local messages
+    local recorded = with_stubs({}, function()
+      messages = capture_notifications(function()
+        dbg.debug(project)
+      end)
+    end)
+
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal(root .. "/bin/Debug/net9.0/Suite.dll", recorded.runs[1].program)
+    -- Named in the session too, so the dap UI does not call it an application.
+    assert.are.equal("dotnet-tree: Suite (tests)", recorded.runs[1].name)
+    assert.is_truthy(joined(messages):find("is a test project", 1, true), joined(messages))
+    assert.is_truthy(joined(messages):find("neotest-dotnet", 1, true), joined(messages))
+    vim.fn.delete(root, "rf")
+  end)
+
+  it("says nothing about tests for an ordinary application", function()
+    local root, project = scratch_project("PlainApp", { "net9.0" })
+
+    local messages
+    local recorded = with_stubs({}, function()
+      messages = capture_notifications(function()
+        dbg.debug(project)
+      end)
+    end)
+
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal("dotnet-tree: PlainApp", recorded.runs[1].name)
+    assert.is_nil(joined(messages):find("test project", 1, true), joined(messages))
     vim.fn.delete(root, "rf")
   end)
 

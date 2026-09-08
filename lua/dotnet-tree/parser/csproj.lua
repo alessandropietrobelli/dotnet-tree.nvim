@@ -32,6 +32,36 @@ local function read_property(root, name)
   return value
 end
 
+-- MSBuild booleans are the strings "true" and "false", compared without regard
+-- to case. Anything else -- an unevaluated property, a typo -- is not a
+-- boolean, and is treated as "the project did not say".
+local function msbuild_bool(value)
+  if value == nil then
+    return nil
+  end
+  local lowered = value:lower()
+  if lowered == "true" then
+    return true
+  elseif lowered == "false" then
+    return false
+  end
+  return nil
+end
+
+-- The package that makes a project a test project as far as MSBuild is
+-- concerned: it is what brings in the test targets, and every template that
+-- produces a test project references it. NuGet ids are case-insensitive.
+local TEST_SDK = "microsoft.net.test.sdk"
+
+local function references_test_sdk(packages)
+  for _, package in ipairs(packages) do
+    if package.name:lower() == TEST_SDK then
+      return true
+    end
+  end
+  return false
+end
+
 function M.parse(csproj_path)
   csproj_path = vim.fs.normalize(csproj_path)
   local stat = vim.uv.fs_stat(csproj_path)
@@ -111,6 +141,19 @@ function M.parse(csproj_path)
       local abs = vim.fs.normalize(result.dir .. "/" .. norm)
       table.insert(result.project_references, { include = include, path = abs })
     end
+  end
+
+  -- Whether this is a test project, as far as *this file* says. OutputType
+  -- does not answer it: an xunit v3 test project declares `Exe`, because v3
+  -- runs each test assembly as its own process -- all 16 test projects in a
+  -- jellyfin checkout do. An explicit property wins over the package reference,
+  -- the way it does in MSBuild, so a project that opts out with
+  -- `<IsTestProject>false</IsTestProject>` is believed.
+  local declared_test = msbuild_bool(read_property(root, "IsTestProject"))
+  if declared_test ~= nil then
+    result.is_test_project = declared_test
+  else
+    result.is_test_project = references_test_sdk(result.packages)
   end
 
   cache[csproj_path] = { mtime = mtime, data = result }

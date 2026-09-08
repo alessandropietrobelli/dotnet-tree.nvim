@@ -70,7 +70,7 @@ local RUNNABLE = { exe = true, winexe = true }
 --- library *before* spending a build on it.
 ---
 ---@param project_path string path to a .csproj/.fsproj/.vbproj
----@return table|nil target { path, dir, assembly_name, frameworks, dll_for }
+---@return table|nil target { path, dir, assembly_name, is_test_project, frameworks, dll_for }
 ---@return string|nil reason why the project cannot be launched
 function M.resolve(project_path)
   local project = csproj.parse(project_path)
@@ -91,6 +91,15 @@ function M.resolve(project_path)
 
   local kind = (output_type or "Library"):lower()
   if not RUNNABLE[kind] then
+    -- A test project that is not runnable is not the same story as a library,
+    -- and saying "this is a library" sends the reader looking for a bug that is
+    -- not there. Only xunit v3 test projects are executables; xunit v2, NUnit
+    -- and MSTest ones build a library that the test host loads, so there is
+    -- nothing for a debugger to launch and `t` is the answer.
+    if project.is_test_project then
+      return nil,
+        ("%s is a test project that builds a library: nothing to launch, use `t` or neotest-dotnet"):format(name)
+    end
     return nil,
       ("%s is a library (OutputType %s) and has no entry point"):format(name, output_type or "Library, by default")
   end
@@ -111,6 +120,7 @@ function M.resolve(project_path)
     path = project_path,
     dir = dir,
     assembly_name = assembly_name,
+    is_test_project = project.is_test_project,
     frameworks = vim.deepcopy(project.target_frameworks),
     dll_for = function(tfm)
       return ("%s/bin/%s/%s/%s.dll"):format(dir, M.configuration, tfm, assembly_name)
@@ -176,10 +186,26 @@ local function launch(dap, target, tfm, opts)
     return
   end
 
+  -- A test project is a runnable assembly and debugging it is legitimate --
+  -- launching it runs the whole suite under the debugger, which is a real thing
+  -- to want. It is not refused; it is named, so nobody presses `d` expecting an
+  -- application and gets a test run.
+  if target.is_test_project then
+    notify(
+      ("%s is a test project: debugging the whole test assembly. For a single test, see neotest-dotnet."):format(
+        vim.fn.fnamemodify(target.path, ":t")
+      ),
+      vim.log.levels.INFO
+    )
+  end
+
   ensure_adapter(dap, opts.debugger)
   dap.run({
     type = "coreclr",
-    name = ("dotnet-tree: %s"):format(vim.fn.fnamemodify(target.path, ":t:r")),
+    name = ("dotnet-tree: %s%s"):format(
+      vim.fn.fnamemodify(target.path, ":t:r"),
+      target.is_test_project and " (tests)" or ""
+    ),
     request = "launch",
     program = program,
     cwd = target.dir,
