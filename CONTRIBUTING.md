@@ -68,7 +68,7 @@ If it stops you, edit whichever file it names rather than relaxing the check.
 | `lua/dotnet-tree/components.lua` | renderer components |
 | `lua/dotnet-tree/git.lua` | git status per node |
 | `lua/dotnet-tree/store.lua` | remembers the selected solution per cwd |
-| `lua/dotnet-tree/parser/` | `sln`, `slnx`, `csproj`, `cpm`, and discovery |
+| `lua/dotnet-tree/parser/` | `sln`, `slnx`, `csproj`, `cpm`, the shared `xml` reader, and discovery |
 | `lua/dotnet-tree/health.lua` | `:checkhealth dotnet-tree` |
 
 Parsers are the place where most contributions will land — the `.sln` and

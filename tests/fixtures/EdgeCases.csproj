@@ -10,15 +10,13 @@
     <ProjectReference Condition=" '$(N)' &gt; '1' " Include="../Escaped/Escaped.csproj" />
 
     <!-- A literal '>', which is valid XML and which MSBuild builds without a
-         warning. The tag scanner stops at the first '>' regardless of quoting,
-         so everything after it is lost. Here the Include has already been read,
-         so the reference survives. -->
+         warning. The reader tracks quoting, so the tag ends where it really
+         ends and both attribute orders read the same. -->
     <ProjectReference Include="../GtAfter/GtAfter.csproj" Condition=" '$(N)' > '1' " />
 
-    <!-- Same construct, opposite attribute order: the scan stops before
-         reaching the Include, so this reference is dropped with no error --
-         silent data loss on a file the toolchain accepts. Documented in the
-         spec, and tracked in issue #10. -->
+    <!-- Same construct, opposite attribute order. This one used to be dropped
+         with no error, because the scan stopped at the '>' before reaching the
+         Include: silent data loss on a file the toolchain accepts. -->
     <ProjectReference Condition=" '$(N)' > '1' " Include="../GtBefore/GtBefore.csproj" />
 
     <!-- Commented out: must not be reported as a real dependency. -->
@@ -34,6 +32,9 @@
     </PackageReference>
     -->
     <PackageReference Include="Live.Package" Version="2.0.0" />
+    <!-- Both the Include and the Version sit behind a literal '>'. The whole
+         package used to be invisible: the truncated tag carried no Include. -->
+    <PackageReference Condition=" '$(N)' > '1' " Include="GtBefore.Package" Version="1.2.3" />
   </ItemGroup>
 
 </Project>

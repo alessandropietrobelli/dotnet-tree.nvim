@@ -15,6 +15,8 @@
 -- <Folder> (or sit at solution root). We reconstruct the folder tree from the
 -- Name paths and attach projects/files to the nearest enclosing folder.
 
+local xml = require("dotnet-tree.parser.xml")
+
 local M = {}
 
 local cache = {}
@@ -34,123 +36,10 @@ local EXT_KIND = {
 }
 
 -- ─── minimal XML ──────────────────────────────────────────────────────────
+-- The reader used to live here; it now sits in parser/xml.lua, where the
+-- .csproj and Directory.Packages.props readers can use it too.
 
-local NAMED_ENTITIES = { lt = "<", gt = ">", amp = "&", quot = '"', apos = "'" }
-
-local function unescape(s)
-  if not s or s:find("&", 1, true) == nil then
-    return s
-  end
-  s = s:gsub("&#x(%x+);", function(h)
-    return vim.fn.nr2char(tonumber(h, 16))
-  end)
-  s = s:gsub("&#(%d+);", function(d)
-    return vim.fn.nr2char(tonumber(d))
-  end)
-  s = s:gsub("&(%a+);", function(name)
-    return NAMED_ENTITIES[name] or ("&" .. name .. ";")
-  end)
-  return s
-end
-
-local function parse_attrs(str)
-  local attrs = {}
-  for k, v in str:gmatch('([%w_:%-%.]+)%s*=%s*"([^"]*)"') do
-    attrs[k] = unescape(v)
-  end
-  for k, v in str:gmatch("([%w_:%-%.]+)%s*=%s*'([^']*)'") do
-    if attrs[k] == nil then
-      attrs[k] = unescape(v)
-    end
-  end
-  return attrs
-end
-
--- The Microsoft slnx reader matches element/attribute names case-insensitively
--- (it emits PascalCase but accepts any casing). Mirror that.
-local function attr_ci(attrs, key)
-  if attrs[key] ~= nil then
-    return attrs[key]
-  end
-  local lk = key:lower()
-  for k, v in pairs(attrs) do
-    if k:lower() == lk then
-      return v
-    end
-  end
-  return nil
-end
-
--- Find the '>' that closes a tag, ignoring any '>' that sits inside a quoted
--- attribute value (a literal '>' is legal in XML attribute values).
-local function find_tag_end(content, from)
-  local i, len = from, #content
-  local quote = nil
-  while i <= len do
-    local c = content:sub(i, i)
-    if quote then
-      if c == quote then
-        quote = nil
-      end
-    elseif c == '"' or c == "'" then
-      quote = c
-    elseif c == ">" then
-      return i
-    end
-    i = i + 1
-  end
-  return nil
-end
-
--- Build a lightweight element tree. Text nodes are ignored (slnx carries data
--- in attributes only). Tolerant of self-closing tags (with or without spaces
--- around the slash), comments, declarations, and '>' inside attribute values.
-local function parse_xml(content)
-  content = content:gsub("^\239\187\191", "") -- strip UTF-8 BOM
-  content = content:gsub("<!%-%-.-%-%->", "") -- comments
-  content = content:gsub("<%?.-%?>", "") -- <?xml ... ?>
-  content = content:gsub("<!%[CDATA%[.-%]%]>", "") -- CDATA (irrelevant here)
-  content = content:gsub("<!.->", "") -- <!DOCTYPE ...>
-
-  local root = { tag = "#root", attrs = {}, children = {} }
-  local stack = { root }
-  local pos, len = 1, #content
-
-  while pos <= len do
-    local lt = content:find("<", pos, true)
-    if not lt then
-      break
-    end
-    local gt = find_tag_end(content, lt + 1)
-    if not gt then
-      break
-    end
-
-    local raw = content:sub(lt + 1, gt - 1):gsub("^%s+", ""):gsub("%s+$", "")
-    if raw:sub(1, 1) == "/" then
-      if #stack > 1 then
-        table.remove(stack)
-      end
-    elseif raw ~= "" then
-      local self_closing = raw:sub(-1) == "/"
-      if self_closing then
-        raw = raw:gsub("/%s*$", "")
-      end
-      local name = raw:match("^([%w_:%-%.]+)")
-      if name then
-        local attr_str = raw:sub(#name + 1)
-        local node = { tag = name, attrs = parse_attrs(attr_str), children = {} }
-        table.insert(stack[#stack].children, node)
-        if not self_closing then
-          table.insert(stack, node)
-        end
-      end
-    end
-    pos = gt + 1
-  end
-
-  return root
-end
+local attr_ci, parse_xml = xml.attr_ci, xml.parse
 
 -- ─── folder path helpers ────────────────────────────────────────────────────
 

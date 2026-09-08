@@ -68,6 +68,7 @@ jobs:
                   'dotnet-tree.commands',
                   'dotnet-tree.components',
                   'dotnet-tree.parser.solution',
+                  'dotnet-tree.parser.xml',
                   'dotnet-tree.parser.sln',
                   'dotnet-tree.parser.slnx',
                   'dotnet-tree.parser.csproj',
