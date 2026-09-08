@@ -141,6 +141,13 @@ declares no `TargetFramework` — it often comes from `Directory.Build.props`,
 which this parser does not follow — is resolved from what the build actually
 put under `bin/Debug/`.
 
+A test project is a runnable assembly too -- xunit v3 test projects declare
+`<OutputType>Exe</OutputType>` -- so `d` debugs one and presents it like any
+other application. That works, but the tree does not yet tell the two apart.
+To debug a single test rather than the whole assembly, use neotest-dotnet:
+
+  https://github.com/Issafalcon/neotest-dotnet
+
 The `coreclr` adapter is registered with nvim-dap only if you have not
 configured one yourself: an adapter you set up wins.
 

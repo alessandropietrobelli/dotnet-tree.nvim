@@ -165,6 +165,14 @@ screen and never starts the debugger. If a project file declares no `TargetFrame
 often lives in `Directory.Build.props`), the framework is taken from what the build put under
 `bin/Debug/`.
 
+A test project is a runnable assembly too — xunit v3 test projects declare
+`<OutputType>Exe</OutputType>` — so `d` will debug one and offer it like any other
+application. That works, but the tree does not yet tell the two apart ([#24]).
+To debug a single test rather than the whole assembly, use
+[neotest-dotnet](https://github.com/Issafalcon/neotest-dotnet).
+
+[#24]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/24
+
 A failed build fills the quickfix list and opens it; a successful one is a single
 message and no window. MSBuild prints every diagnostic twice, and once per target
 framework on a multi-targeted project — those copies are collapsed into one entry per
