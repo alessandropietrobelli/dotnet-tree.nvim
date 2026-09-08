@@ -18,8 +18,11 @@ Please include:
   `Directory.Build.props` and from the file it chains to with
   `GetPathOfFileAbove`, but MSBuild is still not evaluated — a `$(Property)`
   comes back as written, a `Condition` is not decided, no other `Import` is
-  followed, and no other property is inherited — and the `.sln` reader is
-  still line-based, so
+  followed, and no other property is inherited. The one property that *is*
+  evaluated is the output path: `d` asks
+  `dotnet msbuild -getProperty:TargetPath` where the build put the assembly,
+  so a report about `d` launching the wrong file should say what that command
+  prints for the project. The `.sln` reader is still line-based, so
   a retyped or reformatted fragment usually hides the bug
 
 The [bug report form](.github/ISSUE_TEMPLATE/bug_report.yml) asks for all of

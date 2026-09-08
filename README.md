@@ -160,8 +160,13 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 `d` resolves the project's own output — `OutputType` decides whether there is anything to
 launch, and when the project does not declare one its SDK does (`Microsoft.NET.Sdk.Web` and
 `Microsoft.NET.Sdk.Worker` build applications, which is why an ASP.NET Core project has no
-`<OutputType>` in it); `AssemblyName` decides what the file is called — builds it, and starts
-netcoredbg on `bin/Debug/<tfm>/<assembly>.dll`. A library is refused with the reason rather than launched;
+`<OutputType>` in it) — builds it, and then asks MSBuild where the build put the assembly
+(`dotnet msbuild -getProperty:TargetPath`) rather than composing a path. `bin/Debug/<tfm>/` is
+only the default layout: `<ArtifactsPath>` puts every project under one `artifacts/` tree and
+leaves no `bin/` at all, and `<OutputPath>`, `<BaseOutputPath>` and
+`<AppendTargetFrameworkToOutputPath>` each move it somewhere else again. MSBuild is the only
+thing that knows. `-getProperty` needs the .NET 8 SDK or newer; on an older one the default
+layout is composed as before. A library is refused with the reason rather than launched;
 a multi-targeted project asks which framework; a failed build leaves the quickfix list on
 screen and never starts the debugger. A Blazor WebAssembly app is refused too: MSBuild calls
 it an `Exe`, but it runs in the browser and netcoredbg cannot start it. A project that declares
@@ -169,8 +174,9 @@ no `TargetFramework` of its own inherits it from the nearest `Directory.Build.pr
 MSBuild does — and when that file only chains to the one above it with
 `$([MSBuild]::GetPathOfFileAbove(...))`, as a `src/Directory.Build.props` usually does, that
 chain is followed. If the framework is still
-unknown — a framework written as `$(SomeProperty)`, which only MSBuild can expand — the
-framework is taken from what the build put under `bin/Debug/`.
+unknown — a framework written as `$(SomeProperty)`, which only MSBuild can expand — MSBuild is
+asked instead, and a single-targeted project needs no framework at all for that: it names its
+one output directly.
 
 A test project is a runnable assembly too — xunit v3 test projects declare
 `<OutputType>Exe</OutputType>` — so `d` debugs one rather than refusing it, and says that

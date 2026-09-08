@@ -75,6 +75,16 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Fixed
 
+- `d` built the right project and then looked for its assembly in the wrong
+  place whenever the repository moves its output — `<ArtifactsPath>`,
+  `<UseArtifactsOutput>`, `<OutputPath>`, `<BaseOutputPath>` or
+  `<AppendTargetFrameworkToOutputPath>`. `bin/<Configuration>/<tfm>/` is the
+  default layout, not the only one, so the path is now asked of MSBuild
+  (`-getProperty:TargetPath`) instead of composed, and the composed path stays
+  as the fallback for an SDK older than 8, which does not know the switch. The
+  query stays a second process on purpose: `dotnet build -getProperty:...`
+  prints a path and exits 0 even when compilation failed, which would turn a
+  broken build into a debug session on a stale assembly.
 - `d` refused an ASP.NET Core project as a library. `OutputType` has no single
   default in MSBuild: the SDK sets it, and `Microsoft.NET.Sdk.Web` and
   `Microsoft.NET.Sdk.Worker` set `Exe`, which is why a web project never writes

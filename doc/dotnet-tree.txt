@@ -115,7 +115,21 @@ output, builds it, and starts netcoredbg on the assembly the build produced:
                  and Worker SDKs build applications, which is why an ASP.NET
                  Core project never writes <OutputType>
   AssemblyName   decides what the produced file is called
-  TargetFramework  decides which bin/Debug/<tfm>/ the assembly is in
+  TargetFramework  decides which output a multi-targeted project means
+
+Where the assembly is, though, is asked of MSBuild rather than composed:
+
+>
+    dotnet msbuild <project> -getProperty:TargetPath
+<
+`bin/Debug/<tfm>/<assembly>.dll` is only the default layout. A repository that
+sets <ArtifactsPath> puts every project under one artifacts/ tree and has no
+<project>/bin at all; <OutputPath>, <BaseOutputPath> and
+<AppendTargetFrameworkToOutputPath> each move it somewhere else again. One
+query answers for all of them, and it costs a fraction of the build that runs
+just before it. `-getProperty` needs the .NET 8 SDK or newer; on an older SDK
+the default layout is composed as it was before, which is no loss because the
+artifacts layout is itself .NET 8 and later.
 
 Both dependencies are optional and are checked before anything else happens:
 
@@ -147,7 +161,9 @@ declares no `TargetFramework` of its own inherits it from the nearest
 one above it with `$([MSBuild]::GetPathOfFileAbove(...))` — the usual shape of
 a `src/Directory.Build.props` — the chain is followed. When the framework is
 still unknown — written as `$(SomeProperty)`, which only MSBuild can expand —
-it is resolved from what the build actually put under `bin/Debug/`.
+MSBuild is asked, and a single-targeted project needs no framework for that at
+all: it names its one output. Only a multi-targeted project has no single
+answer, and that is the case that asks.
 
 A test project is a runnable assembly too -- xunit v3 test projects declare
 `<OutputType>Exe</OutputType>` -- so `d` debugs one rather than refusing it,
