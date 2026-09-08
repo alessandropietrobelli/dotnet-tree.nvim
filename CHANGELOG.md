@@ -81,7 +81,11 @@ mappings may land in a minor release; they will always be listed here.
   `<AppendTargetFrameworkToOutputPath>`. `bin/<Configuration>/<tfm>/` is the
   default layout, not the only one, so the path is now asked of MSBuild
   (`-getProperty:TargetPath`) instead of composed, and the composed path stays
-  as the fallback for an SDK older than 8, which does not know the switch. The
+  as the fallback for an SDK older than 8, which does not know the switch —
+  there only the default layout is found, since a guess is all that is left.
+  That costs nothing for the artifacts layout, which is itself .NET 8 and
+  later, and it does mean `<OutputPath>` and `<BaseOutputPath>` stay wrong on
+  an SDK that old. The
   query stays a second process on purpose: `dotnet build -getProperty:...`
   prints a path and exits 0 even when compilation failed, which would turn a
   broken build into a debug session on a stale assembly.
