@@ -12,6 +12,26 @@ function M.invalidate(path)
   end
 end
 
+-- An MSBuild property is whatever the last unconditional assignment says. A
+-- `Condition` we cannot evaluate is skipped rather than guessed at, so a
+-- property declared only conditionally reads as nil -- unknown -- and the
+-- caller decides what to do about it. The value itself is returned as written:
+-- a `$(Property)` reference is not expanded here, same as everywhere else in
+-- this parser.
+local function read_property(root, name)
+  local value = nil
+  for _, group in ipairs(xml.find_all(root, "PropertyGroup")) do
+    if xml.attr_ci(group.attrs, "Condition") == nil then
+      for _, node in ipairs(group.children) do
+        if node.tag == name and xml.attr_ci(node.attrs, "Condition") == nil and node.text ~= "" then
+          value = node.text
+        end
+      end
+    end
+  end
+  return value
+end
+
 function M.parse(csproj_path)
   csproj_path = vim.fs.normalize(csproj_path)
   local stat = vim.uv.fs_stat(csproj_path)
@@ -54,13 +74,22 @@ function M.parse(csproj_path)
     end
   end
 
+  local root = xml.parse(content)
+
+  -- What an action needs before it can point at a project's build output:
+  -- whether the project produces something runnable, and what the file is
+  -- called. Both stay nil when the project does not say, and the defaults are
+  -- the caller's -- MSBuild's own are "Library" and the project file's
+  -- basename, and the caller is the one that knows which it is looking at.
+  result.output_type = read_property(root, "OutputType")
+  result.assembly_name = read_property(root, "AssemblyName")
+
   -- A PackageReference declares its version either as a `Version` attribute or
   -- as a `<Version>` child element; MSBuild accepts both and repositories
   -- contain both. Reading the element tree covers the two forms in one pass.
   -- The two text patterns that used to do this could not: the single-line one
   -- matched the opening tag of the child-element form and recorded an empty
   -- version, which then hid that package from the loop written to read it.
-  local root = xml.parse(content)
   local seen_pkg = {}
   for _, node in ipairs(xml.find_all(root, "PackageReference")) do
     local include = xml.attr_ci(node.attrs, "Include")

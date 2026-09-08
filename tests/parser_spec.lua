@@ -103,6 +103,35 @@ describe("parser.csproj", function()
     assert.are.same({ "net8.0", "net9.0" }, csproj.parse(FIXTURES .. "/MultiTarget.csproj").target_frameworks)
   end)
 
+  -- #16. An action that launches a project needs two things the parser did not
+  -- read: whether the project produces something runnable, and what the output
+  -- file is called. Without OutputType a launcher happily targets a library,
+  -- which has no entry point and fails with an opaque runtime error instead of
+  -- "this project is not runnable"; without AssemblyName the path
+  -- bin/<config>/<tfm>/<name>.dll is a guess that is silently wrong whenever a
+  -- project overrides the name.
+  it("reads OutputType and AssemblyName, last unconditional assignment winning", function()
+    local result = csproj.parse(FIXTURES .. "/Executable.csproj")
+    assert.are.equal("Exe", result.output_type)
+    assert.are.equal("dotnet-tool-probe", result.assembly_name)
+  end)
+
+  it("reports OutputType and AssemblyName as nil when the project does not say", function()
+    local result = csproj.parse(FIXTURES .. "/MultiTarget.csproj")
+    assert.is_nil(result.output_type)
+    assert.is_nil(result.assembly_name)
+  end)
+
+  -- The scope boundary, pinned: reading XML is not evaluating MSBuild. A value
+  -- written as a property reference comes back as written, and it is the
+  -- caller's job to treat what it cannot use as unknown rather than to build a
+  -- path out of it.
+  it("returns property references verbatim rather than pretending to evaluate them", function()
+    local result = csproj.parse(FIXTURES .. "/Unevaluated.csproj")
+    assert.are.equal("$(DefaultOutputType)", result.output_type)
+    assert.are.equal("$(MSBuildProjectName).Tool", result.assembly_name)
+  end)
+
   it("returns nil for a file that does not exist", function()
     assert.is_nil(csproj.parse(FIXTURES .. "/DoesNotExist.csproj"))
   end)
