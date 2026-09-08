@@ -54,31 +54,29 @@ function M.parse(csproj_path)
     end
   end
 
-  -- PackageReference Include="X" Version="Y" (single line)
+  -- A PackageReference declares its version either as a `Version` attribute or
+  -- as a `<Version>` child element; MSBuild accepts both and repositories
+  -- contain both. Reading the element tree covers the two forms in one pass.
+  -- The two text patterns that used to do this could not: the single-line one
+  -- matched the opening tag of the child-element form and recorded an empty
+  -- version, which then hid that package from the loop written to read it.
+  local root = xml.parse(content)
   local seen_pkg = {}
-  for tag in xml.iter_tags(content, "PackageReference") do
-    local include = tag:match('Include%s*=%s*"([^"]+)"')
-    local version = tag:match('Version%s*=%s*"([^"]+)"')
+  for _, node in ipairs(xml.find_all(root, "PackageReference")) do
+    local include = xml.attr_ci(node.attrs, "Include")
     if include and not seen_pkg[include] then
       seen_pkg[include] = true
-      table.insert(result.packages, { name = include, version = version or "" })
-    end
-  end
-  -- PackageReference with multiline (Version as child element)
-  for include, inner in content:gmatch('<PackageReference[^>]*Include%s*=%s*"([^"]+)"[^>]*>(.-)</PackageReference>') do
-    if not seen_pkg[include] then
-      seen_pkg[include] = true
-      local version = inner:match("<Version>%s*([^<]-)%s*</Version>") or ""
+      local version = xml.attr_ci(node.attrs, "Version") or xml.child_text(node, "Version") or ""
       table.insert(result.packages, { name = include, version = version })
     end
   end
 
-  -- Tag boundaries come from parser/xml.lua rather than a pattern: it walks
-  -- the text tracking quotes, so a literal '>' inside an attribute value -- the
-  -- usual shape of an MSBuild `Condition` -- no longer truncates the tag and
-  -- drops whatever attribute follows it.
-  for tag in xml.iter_tags(content, "ProjectReference") do
-    local include = tag:match('Include%s*=%s*"([^"]+)"')
+  -- Read from the same element tree. The pattern this replaces captured the
+  -- attribute blob with a non-greedy `.-`, which two earlier fixes had to
+  -- widen: `[^/>]` dropped every reference written with forward slashes, and
+  -- `.-` still stopped at a literal '>' inside a quoted value.
+  for _, node in ipairs(xml.find_all(root, "ProjectReference")) do
+    local include = xml.attr_ci(node.attrs, "Include")
     if include then
       local norm = include:gsub("\\", "/")
       local abs = vim.fs.normalize(result.dir .. "/" .. norm)

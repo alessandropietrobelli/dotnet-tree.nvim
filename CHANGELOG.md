@@ -20,7 +20,10 @@ mappings may land in a minor release; they will always be listed here.
   boundaries, attribute parsing, entity unescaping — now lives in
   `parser/xml.lua` and is shared with the `.csproj` and
   `Directory.Packages.props` readers. No new parser was written: the `.slnx`
-  reader has handled this construct correctly since the first release.
+  reader has handled this construct correctly since the first release. It now
+  also carries element text, which is what lets the package readers see a
+  `<Version>` child. MSBuild is still not evaluated: `Version="$(SerilogVersion)"`
+  comes back verbatim, as it always has.
 
 ### Added
 
@@ -34,6 +37,14 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Fixed
 
+- A package that declares its version as a `<Version>` child element instead of
+  an attribute now keeps that version in `.csproj`, and keeps it in
+  `Directory.Packages.props` even when a self-closing entry is declared before
+  it. Both readers take the two forms from one element tree, so neither the
+  ordering bug in `csproj.lua` — which made the branch written for this form
+  unreachable — nor the pattern that ran from the first `<PackageVersion` in a
+  file to the first `</PackageVersion>` survives.
+  ([#9](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/9))
 - A literal `>` inside an attribute value no longer truncates a tag in
   `.csproj` and `Directory.Packages.props`. That `>` is valid XML — XML 1.0
   §2.4 forbids `<` and `&` in an attribute value, not `>` — and MSBuild builds
@@ -148,7 +159,8 @@ projects.
   leaving its own child-element branch reachable (`cpm.lua:42-49`). Measured:
   `csproj.lua` returns an empty version, `cpm.lua` returns the declared one.
   Recorded as pending tests. Tracked in
-  [#9](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/9).
+  [#9](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/9),
+  and fixed after `0.1.2` — see Unreleased.
 - A literal `>` inside an attribute value is **valid** XML — XML 1.0 §2.4
   forbids `<` and `&` in attribute values, not `>` — and MSBuild builds such a
   project without a warning. The tag scanners in `csproj.lua` and `cpm.lua` read

@@ -76,22 +76,26 @@ describe("parser.csproj", function()
     assert.are.equal("", by_name["NoVersion.FromCpm"])
   end)
 
-  -- Known defect in csproj.lua only, present since the parser was written and
-  -- not addressed here. cpm.lua reads the same form correctly, because its
-  -- first loop requires both Include and Version and so records nothing here.
-  -- The single-line loop matches the opening tag of the child-element form and
-  -- records the package with an empty version, so the multi-line loop that
-  -- would read <Version> skips it as already seen. Independently, the
-  -- multi-line pattern spans across any preceding self-closing tag, so it
-  -- attributes the child <Version> to the wrong package and consumes the real
-  -- one. Enable this once the tag scanner handles both forms in one pass.
-  pending("reads the version from a <Version> child element", function()
+  -- Regression for #9. The version can be written as a `<Version>` child
+  -- element instead of an attribute, and MSBuild accepts both. csproj.lua had a
+  -- branch for exactly this form and could never reach it: the single-line loop
+  -- matched the opening tag, recorded the package with an empty version and
+  -- marked it seen, so the child-element loop skipped it. Independently, that
+  -- second pattern ran from the first <PackageReference in the file to the
+  -- first </PackageReference>, so it spanned the three self-closing entries
+  -- above Multi.Line.Package and would have attributed 2.0.0 to Serilog. Both
+  -- disappear when the two forms are read from one element tree.
+  it("reads the version from a <Version> child element", function()
     local result = csproj.parse(FIXTURES .. "/PathStyles.csproj")
     local by_name = {}
     for _, pkg in ipairs(result.packages) do
       by_name[pkg.name] = pkg.version
     end
     assert.are.equal("2.0.0", by_name["Multi.Line.Package"])
+    -- The self-closing entries the old pattern spanned keep their own versions.
+    assert.are.equal("3.1.1", by_name["Serilog"])
+    assert.are.equal("8.4.1", by_name["Polly"])
+    assert.are.equal("", by_name["NoVersion.FromCpm"])
   end)
 
   it("reads both TargetFramework and TargetFrameworks", function()
@@ -192,13 +196,17 @@ describe("parser.cpm", function()
     assert.are.equal("5.5.5", versions["GtBefore.Cpm"])
   end)
 
-  -- Same known defect as the csproj side: the multi-line pattern starts at the
-  -- first <PackageVersion in the file and runs to the first </PackageVersion>,
-  -- so it swallows the preceding self-closing entries and never sees the tag
-  -- that actually carries the child <Version>.
-  pending("reads versions declared as a <Version> child element", function()
+  -- Same form on the props side (#9). cpm.lua read it correctly only by
+  -- accident of ordering, and lost it as soon as a self-closing entry came
+  -- first: the multi-line pattern started at the first <PackageVersion in the
+  -- file and ran to the first </PackageVersion>, swallowing the entries in
+  -- between and never seeing the tag that carries the child <Version>.
+  it("reads versions declared as a <Version> child element", function()
     local versions = cpm.parse(FIXTURES .. "/Directory.Packages.props")
     assert.are.equal("7.7.7", versions["Multi.Line.Cpm"])
+    -- The self-closing entries above it are unaffected.
+    assert.are.equal("9.9.9", versions["NoVersion.FromCpm"])
+    assert.are.equal("4.0.0", versions["Serilog"])
   end)
 
   it("returns an empty table for a missing props file", function()

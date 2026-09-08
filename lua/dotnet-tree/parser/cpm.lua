@@ -33,21 +33,17 @@ function M.parse(props_path)
 
   content = content:gsub("<!%-%-.-%-%->", "")
 
+  -- Same two forms as a PackageReference in a .csproj: a `Version` attribute
+  -- or a `<Version>` child element. Read from the element tree, as csproj.lua
+  -- does, rather than from two text patterns -- the multi-line one used to run
+  -- from the first <PackageVersion> in the file to the first </PackageVersion>,
+  -- swallowing every self-closing entry in between.
   local versions = {}
-  -- Quote-aware tag boundaries, as in parser/csproj.lua.
-  for tag in xml.iter_tags(content, "PackageVersion") do
-    local include = tag:match('Include%s*=%s*"([^"]+)"')
-    local version = tag:match('Version%s*=%s*"([^"]+)"')
-    if include and version then
+  for _, node in ipairs(xml.find_all(xml.parse(content), "PackageVersion")) do
+    local include = xml.attr_ci(node.attrs, "Include")
+    local version = xml.attr_ci(node.attrs, "Version") or xml.child_text(node, "Version")
+    if include and version and versions[include] == nil then
       versions[include] = version
-    end
-  end
-  for include, inner in content:gmatch('<PackageVersion[^>]*Include%s*=%s*"([^"]+)"[^>]*>(.-)</PackageVersion>') do
-    if not versions[include] then
-      local version = inner:match("<Version>%s*([^<]-)%s*</Version>")
-      if version then
-        versions[include] = version
-      end
     end
   end
 
