@@ -43,14 +43,61 @@ local function joined(messages)
   return table.concat(parts, "\n")
 end
 
+-- A stand-in for `dotnet msbuild -getProperty:<name>`, which #31 made `d`
+-- depend on. Real MSBuild is not run in the suite: 0.6s per query, and CI has
+-- no SDK. What matters is what the module does with each answer shape, and the
+-- shapes are the ones measured on SDK 10.0.302:
+--
+--   TargetPath with a -p:TargetFramework   the assembly, wherever it lives
+--   TargetPath on an outer multi-target    exit 0 and no output
+--   any -getProperty on an SDK before 8    exit 1 (MSB1001)
+--
+-- The default answers for a project that has *not* moved its output, so it
+-- names the same path the composed fallback would. That is deliberate: the
+-- tests that have to tell the two apart are the ones that move the output.
+local function default_msbuild(cmd)
+  local project, property, tfm
+  for _, arg in ipairs(cmd) do
+    if arg:match("%.%a-proj$") then
+      project = arg
+    end
+    property = arg:match("^%-getProperty:(.+)$") or property
+    tfm = arg:match("^%-p:TargetFramework=(.+)$") or tfm
+  end
+  if property == "TargetPath" and project and tfm then
+    return 0,
+      {
+        ("%s/bin/Debug/%s/%s.dll"):format(vim.fn.fnamemodify(project, ":h"), tfm, vim.fn.fnamemodify(project, ":t:r")),
+      }
+  end
+  return 0, {}
+end
+
+-- An SDK older than 8 does not know `-getProperty` and MSBuild exits non-zero,
+-- which is the case the composed fallback exists for.
+local function msbuild_too_old()
+  return 1, { "MSBUILD : error MSB1001: Unknown switch." }
+end
+
 -- Replaces the modules M.debug reaches for. Returns a table recording what the
--- stub dap was asked to run.
+-- stub dap was asked to run, and every command the MSBuild query was asked to
+-- run.
 local function with_stubs(opts, fn)
-  local recorded = { runs = {} }
+  local recorded = { runs = {}, queries = {} }
 
   local previous_dap = package.loaded["dap"]
   local previous_build = package.loaded["dotnet-tree.build"]
   local previous_path = dbg.debugger_path
+  local previous_query = dbg.query
+
+  -- M.query is the module's one process boundary, which is what makes the rest
+  -- of it testable synchronously: the real one is a jobstart whose callback
+  -- would never run inside a test.
+  dbg.query = function(cmd, cb)
+    table.insert(recorded.queries, cmd)
+    local code, lines = (opts.msbuild or default_msbuild)(cmd)
+    cb(code, lines)
+  end
 
   package.loaded["dap"] = {
     adapters = {},
@@ -73,6 +120,7 @@ local function with_stubs(opts, fn)
   package.loaded["dap"] = previous_dap
   package.loaded["dotnet-tree.build"] = previous_build
   dbg.debugger_path = previous_path
+  dbg.query = previous_query
 
   if not ok then
     error(err)
@@ -116,6 +164,34 @@ local function scratch_project(name, tfms, opts)
   end
 
   return root, project
+end
+
+-- A file at `path`, parent directories included. `d` checks the assembly is
+-- readable before handing it to the debugger, so a layout only exists for the
+-- test once something is actually there.
+local function write_assembly(path)
+  vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+  local handle = assert(io.open(path, "w"))
+  handle:write("not really an assembly")
+  handle:close()
+  return path
+end
+
+-- Answers one `-getProperty` query from a table of properties, keyed by name --
+-- or by `name:tfm` when the answer depends on which framework the query named,
+-- which is how a multi-targeted project behaves. A property with no entry reads
+-- as empty, which is exit 0 and no output.
+local function answer(cmd, properties)
+  local property, tfm
+  for _, arg in ipairs(cmd) do
+    property = arg:match("^%-getProperty:(.+)$") or property
+    tfm = arg:match("^%-p:TargetFramework=(.+)$") or tfm
+  end
+  local value = tfm and properties[property .. ":" .. tfm] or properties[property]
+  if not value then
+    return 0, {}
+  end
+  return 0, { value }
 end
 
 describe("debug.resolve", function()
@@ -230,6 +306,31 @@ describe("debug.resolve", function()
   it("returns every declared target framework", function()
     local target = assert(dbg.resolve(FIXTURES .. "/MultiTargetExe.csproj"))
     assert.are.same({ "net8.0", "net9.0" }, dbg.frameworks(target))
+  end)
+end)
+
+-- The three answer shapes of `dotnet msbuild -getProperty:<name>`, measured
+-- rather than assumed. The two behavioural cases below are covered by the `d`
+-- tests as well; the multi-line one is not reachable through them, and it is
+-- the one where guessing would put the debugger on an arbitrary path.
+describe("debug.parse_property", function()
+  it("reads the value out of a one-line answer, trimmed", function()
+    assert.are.equal("/tmp/Api.dll", dbg.parse_property(0, { "  /tmp/Api.dll  ", "" }))
+  end)
+
+  it("reads nothing from an empty answer, which is a property with no value", function()
+    assert.is_nil(dbg.parse_property(0, {}))
+    assert.is_nil(dbg.parse_property(0, { "", "  " }))
+  end)
+
+  it("reads nothing from a non-zero exit, which is an SDK before 8", function()
+    assert.is_nil(dbg.parse_property(1, { "MSBUILD : error MSB1001: Unknown switch." }))
+  end)
+
+  -- More than one value is not an answer to prefer over the fallback: picking
+  -- one of them would be a guess dressed up as a measurement.
+  it("refuses to choose between several lines", function()
+    assert.is_nil(dbg.parse_property(0, { "/tmp/one.dll", "/tmp/two.dll" }))
   end)
 end)
 
@@ -398,6 +499,175 @@ describe("debug.debug", function()
 
     assert.are.equal(0, #recorded.runs)
     assert.is_truthy(joined(messages):find("not there", 1, true), joined(messages))
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- #31. `bin/<Configuration>/<tfm>/<AssemblyName>.dll` is the default layout,
+  -- not the only one. A repository that sets `<ArtifactsPath>` has no
+  -- `<project>/bin` at all, so composing that path did not just miss -- it
+  -- named a directory that does not exist, and `d` was unusable on the whole
+  -- repository. Answered by asking MSBuild where the output went.
+  it("launches the assembly MSBuild names when the output is not under bin/", function()
+    local root, project = scratch_project("Api", {}, { declare = false })
+    local dll = write_assembly(root .. "/artifacts/bin/Api/debug/Api.dll")
+    assert.are.equal(0, vim.fn.isdirectory(root .. "/bin"))
+
+    local recorded = with_stubs({
+      msbuild = function(cmd)
+        return answer(cmd, { TargetPath = dll })
+      end,
+    }, function()
+      dbg.debug(project)
+    end)
+
+    assert.are.equal(project, recorded.built)
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal(dll, recorded.runs[1].program)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- Under the artifacts layout the directory is the *project* name and the file
+  -- is the assembly name, so a renamed assembly breaks composition even where
+  -- the directory is guessed right. MSBuild is told both.
+  it("follows an assembly name that differs from the project name", function()
+    local root, project = scratch_project("Named", {}, { declare = false })
+    local dll = write_assembly(root .. "/artifacts/bin/Named/debug/Renamed.dll")
+
+    local recorded = with_stubs({
+      msbuild = function(cmd)
+        return answer(cmd, { TargetPath = dll })
+      end,
+    }, function()
+      dbg.debug(project)
+    end)
+
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal(dll, recorded.runs[1].program)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- Not a regression test, and counted as what it is: `-getProperty` needs
+  -- MSBuild 17.8, so on an SDK before 8 there is no answer to prefer and the
+  -- old composed path is all there is. It passes against the code before #31
+  -- too -- that code did nothing else. It is here so removing the fallback
+  -- fails something.
+  it("falls back to the default layout when the SDK cannot answer", function()
+    local root, project = scratch_project("OldSdk", { "net9.0" })
+
+    local recorded = with_stubs({ msbuild = msbuild_too_old }, function()
+      dbg.debug(project)
+    end)
+
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal(root .. "/bin/Debug/net9.0/OldSdk.dll", recorded.runs[1].program)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- When the assembly really is missing, the path in the message has to be the
+  -- one the build was configured to produce. Naming a composed `bin/` path
+  -- under an artifacts layout sends the reader to a directory that never
+  -- existed, which is the shape of the original #31 report.
+  it("names the path MSBuild gave when the assembly is not there", function()
+    local root, project = scratch_project("Gone", {}, { declare = false })
+    local dll = root .. "/artifacts/bin/Gone/debug/Gone.dll"
+
+    local messages
+    local recorded = with_stubs({
+      msbuild = function(cmd)
+        return answer(cmd, { TargetPath = dll })
+      end,
+    }, function()
+      messages = capture_notifications(function()
+        dbg.debug(project)
+      end)
+    end)
+
+    assert.are.equal(0, #recorded.runs)
+    local text = joined(messages)
+    assert.is_truthy(text:find("artifacts", 1, true), text)
+    assert.is_nil(text:find("/bin/Debug/", 1, true), text)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- A framework written as `$(DefaultTfm)` is not a framework the parser can
+  -- expand. Before #31 the only way out was to read the frameworks back off
+  -- `bin/`, which a repository that moves its output does not have -- so `d`
+  -- ended in "cannot tell what this builds" with a perfectly good build on
+  -- disk. MSBuild evaluates the property, and for a single-target project
+  -- `TargetPath` answers without being told a framework, so there is nothing to
+  -- ask the user either. Both halves of the guess are gone at once, which is
+  -- why the two central properties are tested together here.
+  it("launches a project whose framework the parser cannot expand", function()
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    local project = root .. "/Indirect.csproj"
+    local handle = assert(io.open(project, "w"))
+    handle:write([[
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTfm)</TargetFramework>
+  </PropertyGroup>
+</Project>
+]])
+    handle:close()
+    local dll = write_assembly(root .. "/artifacts/bin/Indirect/debug/Indirect.dll")
+
+    local target = assert(dbg.resolve(project))
+    assert.are.same({}, target.frameworks)
+    assert.are.same({}, dbg.frameworks(target))
+
+    local messages
+    local recorded = with_stubs({
+      msbuild = function(cmd)
+        return answer(cmd, { TargetPath = dll })
+      end,
+    }, function()
+      messages = capture_notifications(function()
+        dbg.debug(project)
+      end)
+    end)
+
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal(dll, recorded.runs[1].program)
+    assert.is_nil(joined(messages):find("cannot tell", 1, true), joined(messages))
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- The outer build of a multi-targeted project has no single TargetPath, so
+  -- MSBuild answers with nothing. That empty answer is the signal that a choice
+  -- is needed -- and the frameworks to choose from come from MSBuild too, not
+  -- from whatever a previous build left under bin/.
+  it("asks which framework when the outer build names no output", function()
+    local root, project = scratch_project("Multi", {}, { declare = false })
+    local net8 = write_assembly(root .. "/artifacts/bin/Multi/debug_net8.0/Multi.dll")
+    local net9 = write_assembly(root .. "/artifacts/bin/Multi/debug_net9.0/Multi.dll")
+
+    local offered
+    local previous_select = vim.ui.select
+    vim.ui.select = function(items, _, on_choice)
+      offered = items
+      on_choice("net9.0")
+    end
+
+    local recorded = with_stubs({
+      msbuild = function(cmd)
+        return answer(cmd, {
+          TargetFrameworks = "net8.0;net9.0",
+          -- Only the inner build, the one told a framework, has an output.
+          ["TargetPath:net8.0"] = net8,
+          ["TargetPath:net9.0"] = net9,
+        })
+      end,
+    }, function()
+      dbg.debug(project)
+    end)
+
+    vim.ui.select = previous_select
+
+    assert.are.same({ "net8.0", "net9.0" }, offered)
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal(net9, recorded.runs[1].program)
     vim.fn.delete(root, "rf")
   end)
 end)

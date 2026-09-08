@@ -11,6 +11,9 @@
 -- What this deliberately does not do: attach to a running process, read
 -- launchSettings.json, or debug a single test. The first two are separate
 -- features; the third belongs to neotest-dotnet.
+--
+-- Where the assembly *is* is asked of MSBuild rather than composed. See
+-- M.get_property.
 
 local csproj = require("dotnet-tree.parser.csproj")
 
@@ -23,6 +26,124 @@ local ADAPTER_ARGS = { "--interpreter=vscode" }
 -- a prompt: `d` is meant to be one keypress, and debugging a Release build with
 -- optimisations on is not what anyone means by it.
 M.configuration = "Debug"
+
+--- Run a command, and hand its exit code and stdout+stderr lines to `cb`.
+---
+--- The one place this module starts a process, which is what makes the rest of
+--- it testable: the specs replace this.
+---@param cmd string[]
+---@param cb fun(code: integer, lines: string[])
+function M.query(cmd, cb)
+  local lines = {}
+  local function collect(_, data)
+    if not data then
+      return
+    end
+    for _, line in ipairs(data) do
+      table.insert(lines, (line:gsub("\r$", "")))
+    end
+  end
+  local ok, job = pcall(vim.fn.jobstart, cmd, {
+    stdout_buffered = true,
+    stderr_buffered = true,
+    on_stdout = collect,
+    on_stderr = collect,
+    on_exit = function(_, code)
+      cb(code, lines)
+    end,
+  })
+  if not ok or job <= 0 then
+    cb(-1, {})
+  end
+end
+
+--- The single value in `dotnet msbuild -getProperty:<name>` output, or nil.
+---
+--- Three shapes, all measured rather than assumed:
+---
+---   a value    one line, the evaluated property
+---   nothing    exit 0 and no output: the property is empty for this build.
+---              `TargetPath` is empty on the outer build of a multi-targeted
+---              project, because there is no single output then
+---   an error   exit 1. An SDK older than 8 does not know the switch at all and
+---              answers MSB1001 (verified on 6.0.420, where MSBuild exits 1);
+---              so does a project that fails to evaluate
+---
+--- Anything that is not exactly one non-empty line reads as "no answer", and
+--- the caller falls back rather than guessing at the output.
+---@param code integer
+---@param lines string[]
+---@return string|nil value
+function M.parse_property(code, lines)
+  if code ~= 0 then
+    return nil
+  end
+  local value = nil
+  for _, line in ipairs(lines) do
+    local trimmed = line:gsub("^%s+", ""):gsub("%s+$", "")
+    if trimmed ~= "" then
+      if value ~= nil then
+        return nil
+      end
+      value = trimmed
+    end
+  end
+  return value
+end
+
+--- Ask MSBuild to evaluate one property of a project.
+---
+--- `bin/<Configuration>/<tfm>/<AssemblyName>.dll` is the *default* layout, not
+--- the only one, and composing it was wrong on every repository that moves the
+--- output (#31). A repository that sets `<ArtifactsPath>` -- or
+--- `<UseArtifactsOutput>`, the .NET 8 opt-in -- puts every project under one
+--- tree instead, and `<project>/bin` does not exist at all:
+---
+---   artifacts/bin/Api/debug/Api.dll              single target: no tfm segment
+---   artifacts/bin/Multi/debug_net9.0/Multi.dll   multi target: configuration_tfm
+---   artifacts/bin/Named/debug/Renamed.dll        directory is the *project*
+---                                                name, file is the assembly name
+---
+--- Composing that path means reimplementing `ArtifactsPivots` (the lowercased
+--- configuration, the `_tfm` segment that only the inner build of a
+--- multi-targeted project gets, the `_rid` one), plus
+--- `IncludeProjectNameInArtifactsPaths`, `ArtifactsProjectName` and
+--- `ArtifactsBinOutputName` -- see Microsoft.NET.DefaultOutputPaths.targets --
+--- and it would still leave `<OutputPath>`, `<BaseOutputPath>` and
+--- `<AppendTargetFrameworkToOutputPath>` breaking the same path in the same
+--- way. One process gives the exact answer for all of them, measured at 0.6s
+--- against the 2s+ the build before it already costs.
+---
+--- `-getProperty` needs MSBuild 17.8, so an SDK older than 8 cannot answer;
+--- that is why the composed path stays as the fallback rather than being
+--- deleted. It costs nothing there, because the artifacts layout is itself
+--- .NET 8 and later.
+---
+---@param project_path string
+---@param name string the MSBuild property to evaluate
+---@param tfm string|nil pass it for a multi-targeted project: the outer build
+---   has no single TargetPath
+---@param cb fun(value: string|nil)
+function M.get_property(project_path, name, tfm, cb)
+  local cmd = {
+    "dotnet",
+    "msbuild",
+    project_path,
+    "-getProperty:" .. name,
+    "-p:Configuration=" .. M.configuration,
+  }
+  if tfm then
+    table.insert(cmd, "-p:TargetFramework=" .. tfm)
+  end
+  -- No cwd is set, deliberately: dotnet-tree/build.lua does not set one either,
+  -- so the query inherits the same working directory the build ran in and
+  -- therefore resolves the same SDK through the same `global.json`. Pointing
+  -- the query at the project directory instead would let it answer for one SDK
+  -- while the build used another.
+  M.query(cmd, function(code, lines)
+    cb(M.parse_property(code, lines))
+  end)
+end
 
 --- Path to the netcoredbg executable, or nil.
 ---
@@ -204,8 +325,13 @@ local function ensure_adapter(dap, debugger)
   }
 end
 
-local function launch(dap, target, tfm, opts)
-  local program = target.dll_for(tfm)
+--- Start the debugger on `program`.
+---
+--- The path is resolved by the caller rather than composed here: after #31
+--- there is more than one place it can come from, and only one of them is a
+--- guess.
+---@param program string the assembly to launch
+local function launch(dap, target, program, opts)
   if vim.fn.filereadable(program) == 0 then
     notify(
       ("built, but %s is not there; check the assembly name and target framework"):format(
@@ -297,8 +423,18 @@ function M.debug(project_path, opts)
     end)
   end
 
+  -- Ask MSBuild where the build put the assembly, and fall back to the default
+  -- layout when it cannot answer -- an SDK older than 8 does not know
+  -- `-getProperty`. The composed path is a guess about the layout; the answer
+  -- is not, so the answer is preferred whenever there is one and it is on disk.
   local function launch_tfm(tfm)
-    launch(dap, target, tfm, opts)
+    M.get_property(target.path, "TargetPath", tfm, function(from_msbuild)
+      -- MSBuild's answer is preferred even when the file is not there: it is
+      -- the path the build was configured to produce, so it is also the right
+      -- path to name in the message if it is missing. The composed one is only
+      -- for an SDK that cannot answer.
+      launch(dap, target, from_msbuild or target.dll_for(tfm), opts)
+    end)
   end
 
   local function after_build(tfm)
@@ -306,20 +442,41 @@ function M.debug(project_path, opts)
       launch_tfm(tfm)
       return
     end
-    -- Nothing was known before the build. bin/ now says what the project file
-    -- did not.
-    local built = M.frameworks(target)
-    if #built == 0 then
-      notify(
-        ("cannot tell what %s builds: no TargetFramework in the project, nothing under bin/%s"):format(
-          vim.fn.fnamemodify(target.path, ":t"),
-          M.configuration
-        ),
-        vim.log.levels.ERROR
-      )
-      return
-    end
-    choose(built, launch_tfm)
+    -- Nothing was known before the build, so there is no framework to ask
+    -- with. `TargetPath` still answers for a single-target project whatever
+    -- its layout -- including one whose framework is written as
+    -- `$(DefaultTfm)`, which the parser cannot expand -- and comes back empty
+    -- for the outer build of a multi-targeted one, which is the case that
+    -- needs a choice.
+    M.get_property(target.path, "TargetPath", nil, function(from_msbuild)
+      if from_msbuild then
+        launch(dap, target, from_msbuild, opts)
+        return
+      end
+      M.get_property(target.path, "TargetFrameworks", nil, function(declared)
+        local built = {}
+        if declared then
+          for tf in declared:gmatch("[^;%s]+") do
+            table.insert(built, tf)
+          end
+        end
+        -- Last resort, and the only one available before SDK 8: read what the
+        -- build left under bin/<configuration>/.
+        if #built == 0 then
+          built = M.frameworks(target)
+        end
+        if #built == 0 then
+          notify(
+            ("cannot tell what %s builds: no TargetFramework in the project, and MSBuild named no output"):format(
+              vim.fn.fnamemodify(target.path, ":t")
+            ),
+            vim.log.levels.ERROR
+          )
+          return
+        end
+        choose(built, launch_tfm)
+      end)
+    end)
   end
 
   local function proceed(tfm)
