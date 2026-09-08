@@ -13,9 +13,11 @@ Please include:
   Central Package Management (`Directory.Packages.props`)
 - The exact XML that renders wrong — the smallest fragment from the `.sln`,
   `.slnx`, `.csproj` or `Directory.Packages.props`, pasted verbatim and
-  sanitised. The parsers match on text rather than reading XML properly, so
-  quoting, attribute order, self-closing tags and slash direction all matter;
-  a retyped fragment usually hides the bug
+  sanitised. The `.csproj` and `.props` readers now read an element tree, but
+  they still do not evaluate MSBuild — a `$(Property)`, a `Condition` or a
+  value imported from `Directory.Build.props` comes back as written — and the
+  `.sln` reader is still line-based, so a retyped or reformatted fragment
+  usually hides the bug
 
 The [bug report form](.github/ISSUE_TEMPLATE/bug_report.yml) asks for all of
 this. Usage questions belong in

@@ -41,10 +41,12 @@ body:
         `.slnx`, `.csproj` or `Directory.Packages.props`, whichever holds the
         thing that is missing or wrong.
 
-        Paste it **verbatim**. The parsers match on text rather than reading XML
-        properly, so attribute order, quoting style, self-closing tags,
-        whitespace, comments and slash direction all change the outcome —
-        retyping or reformatting the fragment usually hides the bug.
+        Paste it **verbatim**. The readers do not evaluate MSBuild — a
+        `$(Property)`, a `Condition` or anything imported from
+        `Directory.Build.props` comes back as written — and the classic `.sln`
+        reader is line-based, so whitespace, comments, slash direction and the
+        exact text of a value all change the outcome. Retyping or reformatting
+        the fragment usually hides the bug.
 
         Rename anything private; keep the structure. If the bug is not about how
         something renders, write `N/A`.

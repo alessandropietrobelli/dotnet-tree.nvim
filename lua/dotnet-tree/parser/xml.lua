@@ -90,43 +90,15 @@ function M.strip_noise(content)
   return content
 end
 
--- Iterate the opening tags named `name`, quote-aware, in document order.
--- Yields the attribute text of each tag together with whether it was written
--- self-closing; the caller reads whatever attributes it cares about. Closing
--- tags are skipped. Comments are the caller's business: pass content that has
--- already been through `strip_noise` if they matter.
-function M.iter_tags(content, name)
-  local pos, len = 1, #content
-  return function()
-    while pos <= len do
-      local lt = content:find("<", pos, true)
-      if not lt then
-        return nil
-      end
-      local gt = M.find_tag_end(content, lt + 1)
-      if not gt then
-        return nil
-      end
-      local raw = content:sub(lt + 1, gt - 1)
-      pos = gt + 1
-      local tag = raw:match("^([%w_:%-%.]+)")
-      if tag == name then
-        local attr_str = raw:sub(#tag + 1)
-        return attr_str, attr_str:match("/%s*$") ~= nil
-      end
-    end
-    return nil
-  end
-end
-
--- Build a lightweight element tree. Text nodes are ignored (the callers that
--- exist today carry their data in attributes). Tolerant of self-closing tags
--- (with or without spaces around the slash), comments, declarations, and '>'
--- inside attribute values.
+-- Build a lightweight element tree. Each element carries the text written
+-- directly inside it, trimmed, in `.text` -- `<Version>1.2.3</Version>` gives
+-- "1.2.3" -- which is how MSBuild writes half of what a project file says.
+-- Tolerant of self-closing tags (with or without spaces around the slash),
+-- comments, declarations, and '>' inside attribute values.
 function M.parse(content)
   content = M.strip_noise(content)
 
-  local root = { tag = "#root", attrs = {}, children = {} }
+  local root = { tag = "#root", attrs = {}, children = {}, text = "" }
   local stack = { root }
   local pos, len = 1, #content
 
@@ -140,10 +112,16 @@ function M.parse(content)
       break
     end
 
+    if lt > pos then
+      local top = stack[#stack]
+      top.text = top.text .. content:sub(pos, lt - 1)
+    end
+
     local raw = content:sub(lt + 1, gt - 1):gsub("^%s+", ""):gsub("%s+$", "")
     if raw:sub(1, 1) == "/" then
       if #stack > 1 then
-        table.remove(stack)
+        local node = table.remove(stack)
+        node.text = M.unescape(node.text:gsub("^%s+", ""):gsub("%s+$", ""))
       end
     elseif raw ~= "" then
       local self_closing = raw:sub(-1) == "/"
@@ -153,7 +131,7 @@ function M.parse(content)
       local name = raw:match("^([%w_:%-%.]+)")
       if name then
         local attr_str = raw:sub(#name + 1)
-        local node = { tag = name, attrs = M.parse_attrs(attr_str), children = {} }
+        local node = { tag = name, attrs = M.parse_attrs(attr_str), children = {}, text = "" }
         table.insert(stack[#stack].children, node)
         if not self_closing then
           table.insert(stack, node)
@@ -163,7 +141,39 @@ function M.parse(content)
     pos = gt + 1
   end
 
+  -- Elements left open at end of input never saw their closing tag.
+  for i = #stack, 2, -1 do
+    stack[i].text = M.unescape(stack[i].text:gsub("^%s+", ""):gsub("%s+$", ""))
+  end
+
   return root
+end
+
+-- Every element named `name`, anywhere below `node`, in document order.
+function M.find_all(node, name)
+  local found = {}
+  local function walk(n)
+    for _, child in ipairs(n.children) do
+      if child.tag == name then
+        table.insert(found, child)
+      end
+      walk(child)
+    end
+  end
+  walk(node)
+  return found
+end
+
+-- The text of the first direct child named `name`, or nil. Direct rather than
+-- descendant on purpose: `<PackageReference><Version>` must not pick up a
+-- `<Version>` belonging to something nested deeper.
+function M.child_text(node, name)
+  for _, child in ipairs(node.children) do
+    if child.tag == name then
+      return child.text ~= "" and child.text or nil
+    end
+  end
+  return nil
 end
 
 return M
