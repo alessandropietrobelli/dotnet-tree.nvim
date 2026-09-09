@@ -1,0 +1,9 @@
+{
+  // A comment, which vim.json.decode rejects and which real files carry.
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" },
+    }
+  }
+}

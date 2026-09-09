@@ -440,6 +440,100 @@ describe("debug.debug", function()
     vim.fn.delete(root, "rf")
   end)
 
+  -- #33. `r` runs `dotnet run`, which reads Properties/launchSettings.json;
+  -- `d` starts the built assembly, which does not. The same webapi came up in
+  -- Development under one key and Production under the other.
+  describe("launch profile", function()
+    local function with_profile(root, json)
+      vim.fn.mkdir(root .. "/Properties", "p")
+      local handle = assert(io.open(root .. "/Properties/launchSettings.json", "w"))
+      handle:write(json)
+      handle:close()
+    end
+
+    it("puts what the profile declares into the dap configuration", function()
+      local root, project = scratch_project("Profiled", { "net9.0" })
+      with_profile(
+        root,
+        [[{ "profiles": { "http": {
+          "commandName": "Project",
+          "applicationUrl": "http://localhost:5135",
+          "commandLineArgs": "--seed",
+          "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" }
+        } } }]]
+      )
+      local recorded = with_stubs({}, function()
+        dbg.debug(project)
+      end)
+
+      local config = recorded.runs[1]
+      -- `env`, not `environmentVariables`: netcoredbg answers success and
+      -- passes nothing for the latter, so asserting the key name is the whole
+      -- test. Measured over DAP against netcoredbg 3.1.3-1.
+      assert.is_nil(config.environmentVariables)
+      assert.are.equal("Development", config.env.ASPNETCORE_ENVIRONMENT)
+      assert.are.equal("http://localhost:5135", config.env.ASPNETCORE_URLS)
+      assert.are.same({ "--seed" }, config.args)
+      vim.fn.delete(root, "rf")
+    end)
+
+    it("launches in the workingDirectory the profile declares", function()
+      local root, project = scratch_project("Cwd", { "net9.0" })
+      vim.fn.mkdir(root .. "/content", "p")
+      with_profile(root, [[{ "profiles": { "http": { "commandName": "Project", "workingDirectory": "content" } } }]])
+      local recorded = with_stubs({}, function()
+        dbg.debug(project)
+      end)
+
+      assert.are.equal(root .. "/content", recorded.runs[1].cwd)
+      vim.fn.delete(root, "rf")
+    end)
+
+    it("keeps the project directory when the profile declares no workingDirectory", function()
+      local root, project = scratch_project("NoCwd", { "net9.0" })
+      with_profile(
+        root,
+        [[{ "profiles": { "http": { "commandName": "Project",
+        "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" } } } }]]
+      )
+      local recorded = with_stubs({}, function()
+        dbg.debug(project)
+      end)
+
+      assert.are.equal(root, recorded.runs[1].cwd)
+      vim.fn.delete(root, "rf")
+    end)
+
+    -- The promise in the issue: a project without the file behaves exactly as
+    -- it did before #33, which means the keys are absent rather than empty.
+    it("changes nothing for a project with no launchSettings.json", function()
+      local root, project = scratch_project("Plain", { "net9.0" })
+      local recorded = with_stubs({}, function()
+        dbg.debug(project)
+      end)
+
+      local config = recorded.runs[1]
+      assert.is_nil(config.env)
+      assert.is_nil(config.args)
+      assert.are.equal(root, config.cwd)
+      vim.fn.delete(root, "rf")
+    end)
+
+    -- An unreadable profile is not a reason to refuse a launch that worked
+    -- before, and vim.json.decode rejects the comments real files carry.
+    it("still launches when the profile cannot be decoded", function()
+      local root, project = scratch_project("Broken", { "net9.0" })
+      with_profile(root, '{ // comment\n "profiles": { } }')
+      local recorded = with_stubs({}, function()
+        dbg.debug(project)
+      end)
+
+      assert.are.equal(1, #recorded.runs)
+      assert.is_nil(recorded.runs[1].env)
+      vim.fn.delete(root, "rf")
+    end)
+  end)
+
   it("registers the adapter with the netcoredbg it found", function()
     local root, project = scratch_project("Adapter", { "net9.0" })
     with_stubs({ debugger = "/opt/netcoredbg/netcoredbg" }, function()

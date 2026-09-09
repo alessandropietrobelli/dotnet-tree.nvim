@@ -8,14 +8,19 @@
 -- anything else happens, and their absence is a message plus a `:checkhealth`
 -- entry, never an error raised inside the tree.
 --
--- What this deliberately does not do: attach to a running process, read
--- launchSettings.json, or debug a single test. The first two are separate
--- features; the third belongs to neotest-dotnet.
+-- What this deliberately does not do: attach to a running process, or debug a
+-- single test. The first is a separate feature; the second belongs to
+-- neotest-dotnet.
+--
+-- `Properties/launchSettings.json` *is* read, since #33: without it `r` and `d`
+-- started the same web project in two different environments. See
+-- dotnet-tree/parser/launch_settings.lua.
 --
 -- Where the assembly *is* is asked of MSBuild rather than composed. See
 -- M.get_property.
 
 local csproj = require("dotnet-tree.parser.csproj")
+local launch_settings = require("dotnet-tree.parser.launch_settings")
 
 local M = {}
 
@@ -355,6 +360,14 @@ local function launch(dap, target, program, opts)
     )
   end
 
+  -- What `dotnet run` would have used, so that `r` and `d` start the same
+  -- project the same way. A project with no launchSettings.json, or one this
+  -- cannot read, gets `nil` and the configuration below is what it always was.
+  local profile, profile_name = launch_settings.read(target.dir)
+  if profile_name then
+    notify(("launch profile %q"):format(profile_name), vim.log.levels.INFO)
+  end
+
   ensure_adapter(dap, opts.debugger)
   dap.run({
     type = "coreclr",
@@ -364,7 +377,16 @@ local function launch(dap, target, program, opts)
     ),
     request = "launch",
     program = program,
-    cwd = target.dir,
+    -- The profile's `workingDirectory` when it declares one; the project
+    -- directory otherwise, which is what `dotnet run` also defaults to.
+    cwd = (profile and profile.cwd) or target.dir,
+    -- `env`, and not `environmentVariables`: that is the key name inside
+    -- launchSettings.json and the one vsdbg takes, and netcoredbg ignores it
+    -- while answering success. Measured over DAP against netcoredbg 3.1.3-1 --
+    -- see parser/launch_settings.lua. Getting this wrong is silent, which is
+    -- why it is named here as well as there.
+    env = profile and profile.env or nil,
+    args = profile and profile.args or nil,
     -- netcoredbg writes the debuggee's stdout into the dap-repl buffer; without
     -- this a Console.WriteLine goes nowhere the user can see.
     console = "integratedTerminal",

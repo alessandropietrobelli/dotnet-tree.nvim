@@ -12,6 +12,7 @@ local FIXTURES = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h") .
 local csproj = require("dotnet-tree.parser.csproj")
 local cpm = require("dotnet-tree.parser.cpm")
 local props = require("dotnet-tree.parser.props")
+local launch = require("dotnet-tree.parser.launch_settings")
 local solution = require("dotnet-tree.parser.solution")
 
 local function names_of(list, key)
@@ -474,6 +475,104 @@ describe("parser.props", function()
     assert.are.same({ "net10.0" }, csproj.parse(project).target_frameworks)
 
     vim.fn.delete(root, "rf")
+  end)
+end)
+
+describe("parser.launch_settings", function()
+  local function read(name)
+    return launch.read(FIXTURES .. "/launch/" .. name)
+  end
+
+  -- The case in #33: a `dotnet new webapi` profile. Without this the same
+  -- project came up in Production under `d` and in Development under `r`.
+  it("reads the environment and the urls a webapi profile declares", function()
+    local settings, name = read("Webapi")
+    assert.are.equal("http", name)
+    assert.are.equal("Development", settings.env.ASPNETCORE_ENVIRONMENT)
+    assert.are.equal("http://localhost:5135", settings.env.ASPNETCORE_URLS)
+    assert.is_nil(settings.args)
+    assert.is_nil(settings.cwd)
+  end)
+
+  -- Measured, and it is not what the issue originally said. `dotnet run` with
+  -- no --launch-profile picks the first profile *in the file* -- not the one
+  -- named after the project, and not the alphabetically first. The fixture has
+  -- all three, and the file order is the one that has to win, because the point
+  -- of reading this file is that `d` and `r` agree.
+  it("picks the profile dotnet run would pick: first in the file", function()
+    local settings, name = read("Ordered")
+    assert.are.equal("zzz-first-in-file", name)
+    assert.are.equal("zzz-first-in-file", settings.env.PICKED)
+  end)
+
+  it("coerces a number or a boolean to what an environment can hold", function()
+    local settings = read("Ordered")
+    assert.are.equal("8080", settings.env.PORT)
+    assert.are.equal("true", settings.env.TRACE)
+  end)
+
+  -- Same rule as debug.lua's is_unevaluated: MSBuild is not evaluated here, so
+  -- a value written as a property is dropped rather than exported verbatim.
+  it("drops a value only MSBuild could resolve", function()
+    local settings = read("Ordered")
+    assert.is_nil(settings.env.UNEVALUATED)
+  end)
+
+  -- A profile that declares both means the variable. applicationUrl is the
+  -- fallback, not an override.
+  it("lets an explicit ASPNETCORE_URLS beat applicationUrl", function()
+    local settings = read("Ordered")
+    assert.are.equal("http://localhost:9999", settings.env.ASPNETCORE_URLS)
+  end)
+
+  -- commandLineArgs is one string and dap wants a list. Splitting on
+  -- whitespace alone breaks the quoted argument, which is the shape this field
+  -- has whenever it has quotes at all.
+  it("splits commandLineArgs the way a shell would", function()
+    local settings = read("Ordered")
+    assert.are.same({ "--tenant", "Acme Ltd", "--verbose" }, settings.args)
+  end)
+
+  it("resolves a relative workingDirectory against the project directory", function()
+    local settings = read("Ordered")
+    assert.are.equal(FIXTURES .. "/launch/Ordered/sub dir", settings.cwd)
+  end)
+
+  it("takes an absolute workingDirectory as written", function()
+    local settings = launch.settings({ workingDirectory = "/srv/app" }, "/anywhere")
+    assert.are.equal("/srv/app", settings.cwd)
+  end)
+
+  -- vim.json.decode rejects both comments and a trailing comma, and real
+  -- launchSettings.json files carry them -- easy-dotnet.nvim maps the filename
+  -- to json5. An unreadable file has to leave `d` as it was, not raise.
+  it("returns nothing for a file it cannot decode", function()
+    assert.is_nil(read("Json5"))
+  end)
+
+  -- Docker and IIS Express start something that is not the assembly `d` built.
+  it("ignores profiles whose commandName is not Project", function()
+    assert.is_nil(read("NoProject"))
+  end)
+
+  it("returns nothing when there is no launchSettings.json at all", function()
+    assert.is_nil(launch.read(FIXTURES))
+  end)
+
+  -- `pairs` does not iterate a decoded table in file order, so without the raw
+  -- text there is no file order to honour. Falling back to alphabetical keeps
+  -- the choice deterministic instead of varying between runs.
+  it("is deterministic without the raw text to order by", function()
+    local decoded = {
+      profiles = {
+        zeta = { commandName = "Project" },
+        alpha = { commandName = "Project" },
+        middle = { commandName = "Project" },
+      },
+    }
+    for _ = 1, 5 do
+      assert.are.equal("alpha", (launch.profile(decoded, nil)))
+    end
   end)
 end)
 
