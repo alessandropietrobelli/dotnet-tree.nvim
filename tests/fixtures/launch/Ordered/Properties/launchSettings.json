@@ -1,0 +1,25 @@
+{
+  "profiles": {
+    "zzz-first-in-file": {
+      "commandName": "Project",
+      "commandLineArgs": "--tenant \"Acme Ltd\" --verbose",
+      "workingDirectory": "sub dir",
+      "environmentVariables": {
+        "PICKED": "zzz-first-in-file",
+        "PORT": 8080,
+        "TRACE": true,
+        "UNEVALUATED": "$(SomeProperty)",
+        "ASPNETCORE_URLS": "http://localhost:9999"
+      },
+      "applicationUrl": "http://localhost:1111"
+    },
+    "Ordered": {
+      "commandName": "Project",
+      "environmentVariables": { "PICKED": "named-after-project" }
+    },
+    "aaa-alphabetically-first": {
+      "commandName": "Project",
+      "environmentVariables": { "PICKED": "aaa-alphabetically-first" }
+    }
+  }
+}

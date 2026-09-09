@@ -9,6 +9,19 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+### Added
+
+- `d` reads `Properties/launchSettings.json` and starts the debugger with what
+  the launch profile declares: the environment variables, the arguments from
+  `commandLineArgs`, the working directory, and `ASPNETCORE_URLS` from
+  `applicationUrl`. On a `dotnet new webapi` that is the difference between
+  debugging in Production on port 5000 and debugging in Development on the
+  port the profile names — `IsDevelopment()` true, the OpenAPI endpoints
+  mapped, `appsettings.Development.json` read. The profile chosen is the one
+  `dotnet run` would choose: the first `commandName: Project` one in the file.
+  A project with no `launchSettings.json`, or one whose file cannot be read,
+  behaves exactly as before.
+
 ### Fixed
 
 - `d` now builds the configuration it is about to debug. The build ran with no

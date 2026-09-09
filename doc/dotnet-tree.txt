@@ -136,6 +136,30 @@ just before it. `-getProperty` needs the .NET 8 SDK or newer; on an older SDK
 the default layout is composed as it was before, which is no loss because the
 artifacts layout is itself .NET 8 and later.
 
+                                                  *dotnet-tree-launch-profile*
+The launch profile is read too. `Properties/launchSettings.json` is what makes
+`r` and `d` differ otherwise: `r` runs `dotnet run`, which reads it, and `d`
+starts the assembly, which does not. On a `dotnet new webapi` that showed up as
+the same project coming up in Development under one key and Production under
+the other. Four things are taken from the profile:
+
+  environmentVariables  the process environment, so ASPNETCORE_ENVIRONMENT is
+                        Development and appsettings.Development.json is read
+  applicationUrl        as ASPNETCORE_URLS, unless the profile sets that
+                        variable itself
+  commandLineArgs       the arguments, split the way a shell would
+  workingDirectory      where the process starts, relative to the project
+
+The profile is the one `dotnet run` would use with no `--launch-profile`: the
+first `commandName: Project` profile in the file. Docker and IIS Express
+profiles are skipped, because neither starts the assembly that was just built.
+A project with no launchSettings.json, or one whose file cannot be parsed as
+strict JSON, is launched exactly as it was before — the file is a source of
+extra information, never a reason to refuse.
+
+MSBuild is not evaluated here either: a value written as $(Property) is
+dropped rather than exported verbatim.
+
 Both dependencies are optional and are checked before anything else happens:
 
   nvim-dap       https://github.com/mfussenegger/nvim-dap
