@@ -485,6 +485,21 @@ function M.debug(project_path, opts)
       return
     end
     require("dotnet-tree.build").build(project_path, {
+      -- The same Configuration the query below pins. Without it the build takes
+      -- whatever project, props and SDK resolve to while
+      -- `-getProperty:TargetPath` is asked about Debug: a `<Configuration>`
+      -- written without a `Condition` in Directory.Build.props is enough to
+      -- make them disagree, and then either the debugger is handed a path the
+      -- build never wrote, or -- when the layout pins `<OutputPath>` and the two
+      -- collide -- it silently loads the optimised assembly. `Optimize` follows
+      -- `Configuration`, and netcoredbg says what that costs: "Using Just My
+      -- Code with Release builds using compiler optimizations results in a
+      -- degraded debugging experience (e.g. breakpoints will not be hit)".
+      --
+      -- It goes here rather than in dotnet-tree/build.lua because `b` has the
+      -- other contract: a project that declares Release means it for the build.
+      -- `d` is the key that means Debug (see M.configuration).
+      args = { "-c", M.configuration },
       on_complete = function(result)
         if result.code ~= 0 then
           -- The quickfix list is already open with the compiler errors in it.

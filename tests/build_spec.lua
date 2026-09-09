@@ -228,4 +228,27 @@ describe("build.build", function()
     assert.is_nil(build.build(nil))
     assert.is_nil(build.build(""))
   end)
+
+  -- #37 was fixed in the caller, not here, and this is the reason. `d` pins
+  -- Debug because it has to debug what it builds; `b` has the other contract --
+  -- a project or a Directory.Build.props that declares Release means it for the
+  -- build. Pinning a configuration in this function would fix `d` by changing
+  -- `b`, so this asserts that the command carries only what the caller passed.
+  it("adds no configuration of its own", function()
+    local recorded = {}
+    local previous_jobstart = vim.fn.jobstart
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.jobstart = function(cmd)
+      table.insert(recorded, cmd)
+      -- A job id, not a status: build.build treats a value <= 0 as "could not
+      -- start" and notifies instead of recording the command.
+      return 1
+    end
+    build.build("/nowhere/Some.csproj", { notify = false })
+    build.build("/nowhere/Some.csproj", { action = "clean", notify = false, args = { "-c", "Debug" } })
+    vim.fn.jobstart = previous_jobstart
+
+    assert.are.same({ "dotnet", "build", "/nowhere/Some.csproj" }, recorded[1])
+    assert.are.same({ "dotnet", "clean", "/nowhere/Some.csproj", "-c", "Debug" }, recorded[2])
+  end)
 end)

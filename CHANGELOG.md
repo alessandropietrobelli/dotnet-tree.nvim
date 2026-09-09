@@ -9,6 +9,17 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `d` now builds the configuration it is about to debug. The build ran with no
+  arguments while the query that finds the assembly pinned `Debug`, so a
+  `<Configuration>` written without a `Condition` in `Directory.Build.props`
+  was enough to make them disagree: either netcoredbg was handed a path the
+  build never wrote, or — where the layout pins `<OutputPath>` and the two
+  paths collide — it silently loaded the optimised assembly and breakpoints
+  were never hit. `b`, `B`, `c` and `C` are unchanged and still respect the
+  configuration the project and its props chose.
+
 ### Changed
 
 - `b`, `B`, `c` and `C` send their diagnostics to the quickfix list instead of
