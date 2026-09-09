@@ -108,6 +108,7 @@ local function with_stubs(opts, fn)
   package.loaded["dotnet-tree.build"] = {
     build = function(path, build_opts)
       recorded.built = path
+      recorded.build_args = build_opts.args
       build_opts.on_complete({ action = "build", path = path, code = opts.build_code or 0, items = {}, output = {} })
     end,
   }
@@ -403,6 +404,23 @@ describe("debug.debug", function()
     end)
     assert.are.equal(project, recorded.built)
     assert.are.equal(0, #recorded.runs)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- #37. The build ran with no arguments while the query that finds the
+  -- assembly pins `-p:Configuration=Debug`. Measured on SDK 10.0.302 with a
+  -- Directory.Build.props holding `<Configuration>Release</Configuration>` and
+  -- no `Condition`: `dotnet build` writes bin/Release and MSBuild answers
+  -- bin/Debug, which does not exist. Where the layout makes the two paths
+  -- collide the debugger loads the optimised assembly instead, and netcoredbg
+  -- warns that breakpoints will not be hit -- the failure #18 exists to stop.
+  it("builds the configuration it is going to debug", function()
+    local root, project = scratch_project("Pinned", { "net9.0" })
+    local recorded = with_stubs({}, function()
+      dbg.debug(project)
+    end)
+
+    assert.are.same({ "-c", dbg.configuration }, recorded.build_args)
     vim.fn.delete(root, "rf")
   end)
 
