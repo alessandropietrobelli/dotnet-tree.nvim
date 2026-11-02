@@ -11,6 +11,7 @@ CONTENTS                                                     *dotnet-tree*
   6. Configuration ........................... |dotnet-tree-configuration|
   7. Health .................................. |dotnet-tree-health|
   8. Troubleshooting ......................... |dotnet-tree-troubleshooting|
+  9. Trademarks .............................. |dotnet-tree-trademarks|
 
 ==============================================================================
 1. INTRODUCTION                                 *dotnet-tree-introduction*
@@ -286,5 +287,13 @@ dotnet-tree", or ":Neotree" is not an editor command
 "[dotnet-tree] no .sln/.slnx found under <path>"
     No solution below the current working directory. Start Neovim at the
     repository root, or press `s` to select one explicitly.
+
+==============================================================================
+9. TRADEMARKS                                     *dotnet-tree-trademarks*
+
+dotnet-tree.nvim is an independent project. It is not affiliated with,
+endorsed or sponsored by Microsoft or the .NET Foundation. .NET, Visual Studio
+and NuGet are trademarks of their respective owners, used here only to say
+what the plugin works with.
 
 vim:tw=78:ts=8:noet:ft=help:norl:
