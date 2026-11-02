@@ -239,6 +239,12 @@ all at once.
 See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports should include your Neovim version, neo-tree
 version and the output of `:checkhealth dotnet-tree`.
 
+## Trademarks
+
+dotnet-tree.nvim is an independent project. It is not affiliated with, endorsed or sponsored by
+Microsoft or the .NET Foundation. .NET, Visual Studio and NuGet are trademarks of their respective
+owners, used here only to say what the plugin works with.
+
 ## License
 
 [Apache-2.0](LICENSE)
