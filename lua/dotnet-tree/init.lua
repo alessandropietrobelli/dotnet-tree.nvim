@@ -96,6 +96,9 @@ function M.setup(_, _)
       refresh_preserve_focus()
     end,
   })
+
+  -- nuget.nvim changes projects with dotnet, outside any buffer: BufWritePost never sees it
+  require("dotnet-tree.nuget").watch(group, refresh_preserve_focus)
 end
 
 function M.navigate(state, path, path_to_reveal, callback, async)

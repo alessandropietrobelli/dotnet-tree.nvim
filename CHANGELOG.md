@@ -11,6 +11,11 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Added
 
+- Works with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim)
+  when it is installed: `a` on a project's Packages node opens its Browse tab
+  with that project picked, `a` on a package opens it on that package, and the
+  tree reloads after nuget.nvim changes packages. Without it, `a` still asks
+  for a package name (`|dotnet-tree-nuget|`).
 - A "See also" section in the README and in `:help`
   (`|dotnet-tree-see-also|`) pointing to dotnet-counters.nvim and nuget.nvim,
   and a trademark note (`|dotnet-tree-trademarks|`).

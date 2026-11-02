@@ -211,6 +211,20 @@ To debug a single test rather than the whole assembly, use neotest-dotnet:
 The `coreclr` adapter is registered with nvim-dap only if you have not
 configured one yourself: an adapter you set up wins.
 
+NUGET.NVIM                                            *dotnet-tree-nuget*
+
+With nuget.nvim installed, `a` hands packages over to it instead of asking for
+a package name (https://github.com/alessandropietrobelli/nuget.nvim):
+
+  - on a project's Packages node, it opens nuget.nvim's Browse tab, with that
+    project already picked for the install;
+  - on a package node, it opens nuget.nvim on that package: its versions per
+    project, a newer one, advisories, deprecation.
+
+Both use the solution selected in the tree. After nuget.nvim changes packages
+the tree reads the projects again and reloads. Without nuget.nvim, `a` works
+as before.
+
 ==============================================================================
 5. MAPPINGS                                         *dotnet-tree-mappings*
 
@@ -225,6 +239,8 @@ Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
   s                      select solution
   e                      edit the project's .csproj
   a                      add package or project reference
+                         (packages open nuget.nvim when it is installed:
+                         |dotnet-tree-nuget|)
   n                      new file from template
   b                      build project        -> quickfix
   B                      build solution       -> quickfix

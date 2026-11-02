@@ -62,6 +62,7 @@ jobs:
                   'dotnet-tree',
                   'dotnet-tree.health',
                   'dotnet-tree.store',
+                  'dotnet-tree.nuget',
                   'dotnet-tree.git',
                   'dotnet-tree.tree',
                   'dotnet-tree.build',

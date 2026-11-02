@@ -250,14 +250,27 @@ function M.add(state)
   local csproj_path = proj_node.extra.project.path
   local kind = node.extra and node.extra.kind
 
+  -- nuget.nvim, when installed, does packages better than a name prompt: search, versions,
+  -- and the package's state across the solution
+  local function packages(on_kind)
+    local handled = require("dotnet-tree.nuget").open(on_kind, {
+      project = csproj_path,
+      solution = state.dotnet_sln,
+      package = on_kind == "package" and node.extra.package and node.extra.package.name or nil,
+    })
+    if not handled then
+      add_package(csproj_path)
+    end
+  end
+
   if kind == "packages" or kind == "package" then
-    add_package(csproj_path)
+    packages(kind)
   elseif kind == "projrefs" or kind == "project_reference" then
     add_reference(state, csproj_path)
   else
     vim.ui.select({ "package", "reference" }, { prompt = "Add to " .. proj_node.name .. ":" }, function(choice)
       if choice == "package" then
-        add_package(csproj_path)
+        packages("packages")
       elseif choice == "reference" then
         add_reference(state, csproj_path)
       end

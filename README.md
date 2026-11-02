@@ -49,6 +49,11 @@ This source renders that graph.
   in `stdpath("state")/dotnet-tree/solutions.json`
 - **Auto refresh** on `DiagnosticChanged` and on writing `*.csproj`, `*.sln`, `*.slnx`,
   `Directory.Packages.props`
+- **Works with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim)** when it is
+  installed: `a` on a project's Packages opens its window to search and install, with that
+  project picked; `a` on a package opens it on that package — versions per project, updates,
+  advisories. The tree reloads after nuget.nvim changes packages. Without it, `a` asks for a
+  package name as before
 
 ## Requirements
 
@@ -150,7 +155,7 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 | `?` | show help |
 | `s` | select solution (when the repo has more than one) |
 | `e` | edit the project's `.csproj` |
-| `a` | add package or project reference |
+| `a` | add package or project reference — with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim) installed, packages open its window |
 | `n` | new file from template |
 | `b` / `B` | build project / build solution — to the quickfix list |
 | `c` / `C` | clean project / clean solution — to the quickfix list |
