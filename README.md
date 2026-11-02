@@ -239,6 +239,13 @@ all at once.
 See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports should include your Neovim version, neo-tree
 version and the output of `:checkhealth dotnet-tree`.
 
+## See also
+
+Two more plugins for .NET in Neovim, by the same author:
+
+- [dotnet-counters.nvim](https://github.com/alessandropietrobelli/dotnet-counters.nvim) — live .NET runtime metrics (CPU, memory, GC, exceptions, HTTP latency) in a side panel next to the debugger
+- [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim) — a NuGet package manager: browse, update, consolidate and audit the packages of the whole solution in one window
+
 ## Trademarks
 
 dotnet-tree.nvim is an independent project. It is not affiliated with, endorsed or sponsored by

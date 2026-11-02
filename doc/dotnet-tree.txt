@@ -11,7 +11,8 @@ CONTENTS                                                     *dotnet-tree*
   6. Configuration ........................... |dotnet-tree-configuration|
   7. Health .................................. |dotnet-tree-health|
   8. Troubleshooting ......................... |dotnet-tree-troubleshooting|
-  9. Trademarks .............................. |dotnet-tree-trademarks|
+  9. See also ................................ |dotnet-tree-see-also|
+ 10. Trademarks .............................. |dotnet-tree-trademarks|
 
 ==============================================================================
 1. INTRODUCTION                                 *dotnet-tree-introduction*
@@ -289,7 +290,22 @@ dotnet-tree", or ":Neotree" is not an editor command
     repository root, or press `s` to select one explicitly.
 
 ==============================================================================
-9. TRADEMARKS                                     *dotnet-tree-trademarks*
+9. SEE ALSO                                         *dotnet-tree-see-also*
+
+Two more plugins for .NET in Neovim, by the same author:
+
+dotnet-counters.nvim
+    Live .NET runtime metrics (CPU, memory, GC, exceptions, HTTP latency)
+    in a side panel next to the debugger.
+    https://github.com/alessandropietrobelli/dotnet-counters.nvim
+
+nuget.nvim
+    A NuGet package manager: browse, update, consolidate and audit the
+    packages of the whole solution in one window.
+    https://github.com/alessandropietrobelli/nuget.nvim
+
+==============================================================================
+10. TRADEMARKS                                    *dotnet-tree-trademarks*
 
 dotnet-tree.nvim is an independent project. It is not affiliated with,
 endorsed or sponsored by Microsoft or the .NET Foundation. .NET, Visual Studio

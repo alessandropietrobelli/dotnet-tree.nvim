@@ -11,6 +11,9 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Added
 
+- A "See also" section in the README and in `:help`
+  (`|dotnet-tree-see-also|`) pointing to dotnet-counters.nvim and nuget.nvim,
+  and a trademark note (`|dotnet-tree-trademarks|`).
 - `d` reads `Properties/launchSettings.json` and starts the debugger with what
   the launch profile declares: the environment variables, the arguments from
   `commandLineArgs`, the working directory, and `ASPNETCORE_URLS` from
