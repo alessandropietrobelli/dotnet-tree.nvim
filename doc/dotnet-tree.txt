@@ -99,7 +99,14 @@ multi-targeted project. Those copies are collapsed into one entry per source
 position.
 
 `r`, `t` and `w` still open a terminal split, where their output is
-interactive.
+interactive. The terminal buffer is named after what it runs and on which
+project — `dotnet-tree://run Api`, `dotnet-tree://watch test Api.Tests` — so
+the split's |winbar| tells a run from a watch. A second terminal for the
+same command, while the first is still open, gets a number: `run Api (2)`.
+
+The terminal buffer is unlisted ('buflisted' off), so a bufferline does not
+show it next to your files, where clicking it would open the terminal in the
+editor window. Find it with |:ls!| or by its name.
 
 Other plugins' lists are left alone: a build replaces the list it created
 itself and otherwise pushes a new one, so |:colder| still reaches your

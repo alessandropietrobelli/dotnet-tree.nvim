@@ -1,4 +1,5 @@
 local cc = require("neo-tree.sources.common.commands")
+local terminal = require("dotnet-tree.terminal")
 
 local M = {}
 for k, v in pairs(cc) do
@@ -183,12 +184,6 @@ local function find_project_node(state)
   return nil
 end
 
-local function run_in_terminal(cmd)
-  vim.cmd("botright 15split")
-  vim.cmd("terminal " .. cmd)
-  vim.cmd("startinsert")
-end
-
 local function add_package(csproj_path)
   vim.ui.input({ prompt = "Package name (optional @version): " }, function(input)
     if not input or input == "" then
@@ -200,7 +195,7 @@ local function add_package(csproj_path)
     if version then
       cmd = cmd .. " --version " .. vim.fn.shellescape(version)
     end
-    run_in_terminal(cmd)
+    terminal.open(cmd, "add " .. name .. " to " .. terminal.project_name(csproj_path))
   end)
 end
 
@@ -233,7 +228,7 @@ local function add_reference(state, csproj_path)
       return
     end
     local cmd = "dotnet add " .. vim.fn.shellescape(csproj_path) .. " reference " .. vim.fn.shellescape(choice.path)
-    run_in_terminal(cmd)
+    terminal.open(cmd, "add " .. choice.name .. " to " .. terminal.project_name(csproj_path))
   end)
 end
 
@@ -396,7 +391,8 @@ function M.run_project(state)
     vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
     return
   end
-  run_in_terminal("dotnet run --project " .. vim.fn.shellescape(node.extra.project.path))
+  local path = node.extra.project.path
+  terminal.open("dotnet run --project " .. vim.fn.shellescape(path), "run " .. terminal.project_name(path))
 end
 
 function M.build_solution(state)
@@ -430,7 +426,8 @@ function M.test(state)
     vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
     return
   end
-  run_in_terminal("dotnet test " .. vim.fn.shellescape(node.extra.project.path))
+  local path = node.extra.project.path
+  terminal.open("dotnet test " .. vim.fn.shellescape(path), "test " .. terminal.project_name(path))
 end
 
 -- `d`: build the project under the cursor, then start netcoredbg on what it
@@ -455,7 +452,11 @@ function M.watch(state)
     if not choice then
       return
     end
-    run_in_terminal("dotnet watch " .. choice .. " --project " .. vim.fn.shellescape(node.extra.project.path))
+    local path = node.extra.project.path
+    terminal.open(
+      "dotnet watch " .. choice .. " --project " .. vim.fn.shellescape(path),
+      "watch " .. choice .. " " .. terminal.project_name(path)
+    )
   end)
 end
 

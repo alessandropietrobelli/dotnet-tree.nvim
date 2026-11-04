@@ -9,6 +9,18 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+### Changed
+
+- The terminal `r`, `t`, `w` and `a` open is named after what it runs and on
+  which project — `dotnet-tree://run Api`, `dotnet-tree://watch test
+  Api.Tests` — instead of the `term://` command line, and the label is shown
+  in the split's winbar, so a run and a watch side by side are told apart. A
+  second terminal for the same command gets a number: `run Api (2)`
+  (`|dotnet-tree-quickfix|`).
+- That terminal buffer is unlisted, so a bufferline no longer shows it next
+  to the files, where clicking it opened the terminal in the editor window.
+  `:ls!` still lists it.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added

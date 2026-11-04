@@ -44,7 +44,9 @@ This source renders that graph.
 - **Build errors in the quickfix list**, deduplicated and jumpable — including the ones no
   language server can see, such as a failed restore, which stops compilation before any
   compiler error is reported. `run`, `test` and `watch` stay in a terminal, where their
-  output is interactive
+  output is interactive. Each one is labelled in its own winbar with what it runs (`run Api`,
+  `watch test Api.Tests`), and stays out of a bufferline, so clicking a tab never opens a
+  terminal in the editor window
 - **Multiple solutions** — pick one with `s`; the choice is remembered per working directory
   in `stdpath("state")/dotnet-tree/solutions.json`
 - **Auto refresh** on `DiagnosticChanged` and on writing `*.csproj`, `*.sln`, `*.slnx`,
