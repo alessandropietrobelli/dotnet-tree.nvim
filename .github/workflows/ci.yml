@@ -67,6 +67,8 @@ jobs:
                   'dotnet-tree.tree',
                   'dotnet-tree.build',
                   'dotnet-tree.debug',
+                  'dotnet-tree.reveal',
+                  'dotnet-tree.terminal',
                   'dotnet-tree.commands',
                   'dotnet-tree.components',
                   'dotnet-tree.parser.solution',

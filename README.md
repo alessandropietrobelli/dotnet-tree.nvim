@@ -49,6 +49,10 @@ This source renders that graph.
   terminal in the editor window
 - **Multiple solutions** — pick one with `s`; the choice is remembered per working directory
   in `stdpath("state")/dotnet-tree/solutions.json`
+- **Follow the current file** — `:Neotree dotnet-tree reveal` puts the cursor on the file you
+  are editing, expanding the project and folders above it, and `follow_current_file` does it
+  on every buffer switch without leaving the editor, as the filesystem source does. Folders
+  you open or close yourself are left alone
 - **Auto refresh** on `DiagnosticChanged` and on writing `*.csproj`, `*.sln`, `*.slnx`,
   `Directory.Packages.props`
 - **Works with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim)** when it is
@@ -209,6 +213,11 @@ Configure it as a neo-tree source — the table is merged over
 opts = {
   sources = { "filesystem", "dotnet-tree" },
   ["dotnet-tree"] = {
+    -- reveal the current file on every buffer switch, as the filesystem source does
+    follow_current_file = {
+      enabled = false,
+      leave_dirs_open = false, -- close the folders a previous reveal or follow opened
+    },
     window = {
       position = "left",
       width = 40,

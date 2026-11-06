@@ -1,4 +1,5 @@
 local cc = require("neo-tree.sources.common.commands")
+local reveal = require("dotnet-tree.reveal")
 local terminal = require("dotnet-tree.terminal")
 
 local M = {}
@@ -113,6 +114,7 @@ function M.open(state)
 
   if NON_OPENABLE[kind] or node.type == "directory" then
     if node:has_children() then
+      reveal.forget(state, node:get_id())
       cc.toggle_node(state)
     end
     return
@@ -153,19 +155,30 @@ function M.select_solution(state)
   end)
 end
 
+-- A directory the user toggles is theirs from then on: follow_current_file
+-- must not close it again (reveal.forget).
+local function current_id(state)
+  local node = state.tree and state.tree:get_node()
+  return node and node:get_id()
+end
+
 function M.toggle_node(state)
+  reveal.forget(state, current_id(state))
   cc.toggle_node(state)
 end
 
 function M.close_node(state)
+  reveal.forget(state, current_id(state))
   cc.close_node(state)
 end
 
 function M.close_all_nodes(state)
+  reveal.forget(state)
   cc.close_all_nodes(state)
 end
 
 function M.expand_all_nodes(state)
+  reveal.forget(state)
   cc.expand_all_nodes(state)
 end
 
