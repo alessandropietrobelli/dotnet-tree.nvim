@@ -181,9 +181,10 @@ function M.navigate(state, path, path_to_reveal, callback, async)
   -- :Neotree is an implied reveal of whatever buffer is current.
   local reveal_id = reveal.lookup(state.dotnet_index, path_to_reveal)
   if reveal_id then
-    local ok, err = pcall(reveal.focus, state, reveal_id)
+    local ok, reveal_err = pcall(reveal.focus, state, reveal_id)
     if not ok then
-      vim.notify("[dotnet-tree] could not reveal " .. path_to_reveal .. ": " .. tostring(err), vim.log.levels.ERROR)
+      local msg = "[dotnet-tree] could not reveal " .. path_to_reveal .. ": " .. tostring(reveal_err)
+      vim.notify(msg, vim.log.levels.ERROR)
     end
   end
 
