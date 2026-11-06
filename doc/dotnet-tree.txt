@@ -84,11 +84,13 @@ The tree refreshes automatically on |DiagnosticChanged| and after writing
 `Directory.Packages.props`.
 
                                                      *dotnet-tree-reveal*
-`reveal` puts the cursor on the current file: the tree expands the solution
-folder, the project and the folders above it. A `.csproj` lands on its
-project node, and a file that is not part of the solution leaves the cursor
-where it is. In a project nested inside another project's directory, the file
-is shown under the innermost project, the one that compiles it.
+`reveal` puts the cursor on the current file: the tree expands the solution,
+any solution folders, the project and the folders above the file. A `.csproj`
+lands on its project node. A file the tree does not show (outside every
+project directory and not a solution item, or under `bin` and `obj`) leaves
+the cursor where it is. A project nested inside another project's directory
+has its files listed under both; the cursor goes to the copy under the
+innermost project.
 
                                          *dotnet-tree-follow-current-file*
 To do that on every buffer switch, without leaving the editor, enable
@@ -102,8 +104,21 @@ To do that on every buffer switch, without leaving the editor, enable
     }
 <
 It acts only while the tree is on screen, and not when it is a float. With
-`leave_dirs_open = false` the folders it opened for the previous file are
-closed again; folders you opened yourself are never closed.
+`leave_dirs_open = false` the folders a previous reveal or follow opened are
+closed again when the next file does not need them. A folder you open or
+close yourself, with any mapping, is yours from then on and is left alone.
+
+With the option enabled, neo-tree treats every `:Neotree dotnet-tree` as a
+reveal of the current file, as it does for the filesystem source: opening
+the tree also puts the cursor on the file you are editing. When that file is
+outside the working directory (a decompiled source, a package under
+`~/.nuget`), neo-tree asks first whether to change the working directory.
+The question comes from neo-tree, and the answer does not move this tree,
+which always shows the solution; answer no.
+
+The tree finds the file by what it last rendered, so a file created since
+then is followed after the next refresh (`R`, saving a project file, or the
+automatic one on |DiagnosticChanged|).
 
                                                         *dotnet-tree-quickfix*
 BUILD OUTPUT

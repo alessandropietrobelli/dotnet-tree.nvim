@@ -11,18 +11,21 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Added
 
-- `follow_current_file`, the filesystem source's option: on every buffer
-  switch the tree expands down to the current file and puts the cursor on it,
-  keeping the focus in the editor. `leave_dirs_open` keeps the folders it
-  opened (`|dotnet-tree-follow-current-file|`, #43).
+- `follow_current_file`, the same option the filesystem source has: on
+  every buffer switch the tree expands down to the current file and puts the
+  cursor on it, keeping the focus in the editor. With `leave_dirs_open =
+  false` it closes the folders a previous reveal or follow opened, never one
+  you toggled yourself. As with the filesystem source, enabling it makes
+  every `:Neotree dotnet-tree` reveal the current file
+  (`|dotnet-tree-follow-current-file|`, #43).
 
 ### Fixed
 
 - `:Neotree reveal` left the cursor on the solution instead of the current
-  file. neo-tree reveals a path by focusing the node whose id is that path,
-  and the ids here are not paths; the lookup now goes through an index from
-  path to node, and the folders above the file are expanded
-  (`|dotnet-tree-reveal|`, #43).
+  file. neo-tree hands the source the path to reveal, and `navigate` passed
+  it to `renderer.focus_node`, which looks a node up by id; the ids here are
+  not paths. The lookup now goes through an index from path to node, and
+  the folders above the file are expanded (`|dotnet-tree-reveal|`, #43).
 
 ### Changed
 

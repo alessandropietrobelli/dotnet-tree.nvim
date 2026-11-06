@@ -51,7 +51,8 @@ This source renders that graph.
   in `stdpath("state")/dotnet-tree/solutions.json`
 - **Follow the current file** — `:Neotree dotnet-tree reveal` puts the cursor on the file you
   are editing, expanding the project and folders above it, and `follow_current_file` does it
-  on every buffer switch without leaving the editor, as the filesystem source does
+  on every buffer switch without leaving the editor, as the filesystem source does. Folders
+  you open or close yourself are left alone
 - **Auto refresh** on `DiagnosticChanged` and on writing `*.csproj`, `*.sln`, `*.slnx`,
   `Directory.Packages.props`
 - **Works with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim)** when it is
@@ -215,7 +216,7 @@ opts = {
     -- reveal the current file on every buffer switch, as the filesystem source does
     follow_current_file = {
       enabled = false,
-      leave_dirs_open = false, -- close the folders it opened for the previous file
+      leave_dirs_open = false, -- close the folders a previous reveal or follow opened
     },
     window = {
       position = "left",

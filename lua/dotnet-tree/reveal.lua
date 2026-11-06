@@ -1,7 +1,8 @@
 -- Finding a file in the tree: `:Neotree reveal` and `follow_current_file`.
 --
--- neo-tree reveals a path by focusing the node whose id is that path. That is
--- how the filesystem source names its nodes, but not this one: a file here is
+-- neo-tree hands the source a path to reveal (`path_to_reveal`), while its
+-- helpers such as `renderer.focus_node` look a node up by id. The filesystem
+-- source uses the path as the id; this one cannot: a file here is
 -- `dotnet:proj:<guid>:file:<path>`, because the id has to say which project it
 -- sits under. So every lookup goes through an index from path to node id,
 -- built once per tree and kept on the state. Following the current file is
@@ -23,8 +24,10 @@ local INDEXED = { solution = true, project = true, folder = true, file = true }
 ---
 --- A project nested in another project's directory has its files listed
 --- twice: under its own node, and under the outer project's folders. The
---- copy kept is the one under the innermost project, the one that compiles
---- the file.
+--- copy kept is the one under the innermost project, normally the one meant
+--- to own the file. Two projects in one directory list each other's .csproj
+--- as a plain file at the same depth; there the project node wins, so a
+--- .csproj always lands on its project.
 ---@param items table[]
 ---@return table<string, string>
 function M.index(items)
@@ -40,7 +43,8 @@ function M.index(items)
       if node.path and INDEXED[kind] then
         local path = normalize(node.path)
         local depth = #(dir or "")
-        if not index[path] or depth > owner_depth[path] then
+        local deeper = not index[path] or depth > owner_depth[path]
+        if deeper or (depth == owner_depth[path] and kind == "project") then
           index[path] = node.id
           owner_depth[path] = depth
         end
@@ -55,9 +59,11 @@ function M.index(items)
   return index
 end
 
---- The id of the node showing `path`, or nil when the file is not in the
---- solution. The real path is tried too, so a file opened through a symlink
---- (or /tmp vs /private/tmp on macOS) is still found.
+--- The id of the node showing `path`, or nil when no node shows it: outside
+--- every project directory and not a solution item, or under bin/obj. The
+--- real path of the file is tried too, so a file opened through a symlink
+--- (or /tmp vs /private/tmp on macOS) is still found, as long as the tree
+--- itself was built from real paths.
 ---@param index table<string, string>|nil
 ---@param path string|nil
 ---@return string|nil
@@ -92,10 +98,12 @@ end
 --- Expands the nodes above `id` and moves the tree cursor onto it.
 ---
 --- With `opts.follow`, the editor keeps the focus, and unless
---- `opts.leave_dirs_open` is set, the directories a previous follow opened
---- and this one does not need are collapsed again, the way the filesystem
---- source does it. Directories the user opened are never collapsed: only the
---- ones this function expanded are tracked.
+--- `opts.leave_dirs_open` is set, the directories a previous reveal or follow
+--- opened and this one does not need are collapsed again. That is the intent
+--- of the filesystem source's option, reached the other way round: it tracks
+--- what the user opened, this tracks what reveal opened itself. A directory
+--- the user toggles is dropped from that set (`M.forget`), so once you have
+--- touched a directory it is yours and follow leaves it alone.
 ---@param state table neo-tree state, with `tree`
 ---@param id string
 ---@param opts? { follow?: boolean, leave_dirs_open?: boolean }
@@ -134,6 +142,21 @@ function M.focus(state, id, opts)
 
   renderer.redraw(state)
   return renderer.focus_node(state, id, opts.follow) ~= false
+end
+
+--- Stops tracking `id` as opened by reveal, because the user toggled it.
+--- Without an id, forgets every directory: the user closed or expanded all.
+---@param state table
+---@param id? string
+function M.forget(state, id)
+  if not state.dotnet_follow_opened then
+    return
+  end
+  if id then
+    state.dotnet_follow_opened[id] = nil
+  else
+    state.dotnet_follow_opened = {}
+  end
 end
 
 --- The `follow_current_file` handler: reveals the current buffer's file in a

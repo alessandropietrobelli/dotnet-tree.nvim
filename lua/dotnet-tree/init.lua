@@ -55,6 +55,27 @@ M.default_config = {
   },
 }
 
+-- follow_current_file runs on every buffer switch: an error there is logged
+-- each time but shown once, rather than on every switch or never.
+local follow_warned = false
+
+local function on_buffer_enter()
+  local ok, err = pcall(function()
+    local manager = require("neo-tree.sources.manager")
+    require("dotnet-tree.reveal").follow(manager.get_state(M.name), manager.get_path_to_reveal())
+  end)
+  if ok then
+    return
+  end
+  pcall(function()
+    require("neo-tree.log").debug("[dotnet-tree] follow_current_file failed: ", err)
+  end)
+  if not follow_warned then
+    follow_warned = true
+    vim.notify("[dotnet-tree] follow_current_file failed: " .. tostring(err), vim.log.levels.WARN)
+  end
+end
+
 local function find_default_sln(cwd)
   return require("dotnet-tree.parser.solution").find(cwd)[1]
 end
@@ -73,12 +94,11 @@ function M.setup(config, _)
   local group = vim.api.nvim_create_augroup("DotnetTreeAutoRefresh", { clear = true })
 
   if config and config.follow_current_file and config.follow_current_file.enabled then
-    local manager = require("neo-tree.sources.manager")
-    manager.subscribe(M.name, {
+    require("neo-tree.sources.manager").subscribe(M.name, {
       event = require("neo-tree.events").VIM_BUFFER_ENTER,
+      -- must not return true: neo-tree drops a handler that does
       handler = function()
-        local state = manager.get_state(M.name)
-        pcall(require("dotnet-tree.reveal").follow, state, manager.get_path_to_reveal())
+        on_buffer_enter()
       end,
     })
   end
@@ -156,10 +176,15 @@ function M.navigate(state, path, path_to_reveal, callback, async)
   state.dotnet_index = reveal.index(items)
   renderer.show_nodes(items, state)
 
-  -- node ids are not paths here, so `:Neotree reveal` goes through the index
+  -- node ids are not paths here, so `:Neotree reveal` goes through the index.
+  -- A file no node shows is not an error: with follow_current_file every
+  -- :Neotree is an implied reveal of whatever buffer is current.
   local reveal_id = reveal.lookup(state.dotnet_index, path_to_reveal)
   if reveal_id then
-    pcall(reveal.focus, state, reveal_id)
+    local ok, err = pcall(reveal.focus, state, reveal_id)
+    if not ok then
+      vim.notify("[dotnet-tree] could not reveal " .. path_to_reveal .. ": " .. tostring(err), vim.log.levels.ERROR)
+    end
   end
 
   if callback then
