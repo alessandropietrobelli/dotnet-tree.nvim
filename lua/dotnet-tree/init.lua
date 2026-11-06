@@ -4,6 +4,13 @@ local M = {
 }
 
 M.default_config = {
+  -- Like the filesystem source's option: on every buffer switch, expand the
+  -- tree down to the current file and put the cursor on it, keeping the focus
+  -- in the editor. leave_dirs_open keeps the folders it opened on the way.
+  follow_current_file = {
+    enabled = false,
+    leave_dirs_open = false,
+  },
   window = {
     position = "left",
     width = 40,
@@ -62,8 +69,19 @@ local function refresh_preserve_focus()
   end
 end
 
-function M.setup(_, _)
+function M.setup(config, _)
   local group = vim.api.nvim_create_augroup("DotnetTreeAutoRefresh", { clear = true })
+
+  if config and config.follow_current_file and config.follow_current_file.enabled then
+    local manager = require("neo-tree.sources.manager")
+    manager.subscribe(M.name, {
+      event = require("neo-tree.events").VIM_BUFFER_ENTER,
+      handler = function()
+        local state = manager.get_state(M.name)
+        pcall(require("dotnet-tree.reveal").follow, state, manager.get_path_to_reveal())
+      end,
+    })
+  end
 
   local diag_pending = false
   vim.api.nvim_create_autocmd("DiagnosticChanged", {
@@ -134,10 +152,14 @@ function M.navigate(state, path, path_to_reveal, callback, async)
     return
   end
 
+  local reveal = require("dotnet-tree.reveal")
+  state.dotnet_index = reveal.index(items)
   renderer.show_nodes(items, state)
 
-  if path_to_reveal then
-    pcall(renderer.focus_node, state, path_to_reveal)
+  -- node ids are not paths here, so `:Neotree reveal` goes through the index
+  local reveal_id = reveal.lookup(state.dotnet_index, path_to_reveal)
+  if reveal_id then
+    pcall(reveal.focus, state, reveal_id)
   end
 
   if callback then

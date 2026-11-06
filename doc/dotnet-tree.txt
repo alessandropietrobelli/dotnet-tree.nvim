@@ -83,6 +83,28 @@ The tree refreshes automatically on |DiagnosticChanged| and after writing
 `*.csproj`, `*.fsproj`, `*.vbproj`, `*.sln`, `*.slnx` or
 `Directory.Packages.props`.
 
+                                                     *dotnet-tree-reveal*
+`reveal` puts the cursor on the current file: the tree expands the solution
+folder, the project and the folders above it. A `.csproj` lands on its
+project node, and a file that is not part of the solution leaves the cursor
+where it is. In a project nested inside another project's directory, the file
+is shown under the innermost project, the one that compiles it.
+
+                                         *dotnet-tree-follow-current-file*
+To do that on every buffer switch, without leaving the editor, enable
+`follow_current_file`, the same option the filesystem source has: >lua
+
+    ["dotnet-tree"] = {
+      follow_current_file = {
+        enabled = true,
+        leave_dirs_open = false,
+      },
+    }
+<
+It acts only while the tree is on screen, and not when it is a float. With
+`leave_dirs_open = false` the folders it opened for the previous file are
+closed again; folders you opened yourself are never closed.
+
                                                         *dotnet-tree-quickfix*
 BUILD OUTPUT
 
@@ -270,6 +292,10 @@ Configure it as a neo-tree source. The table is merged over
     opts = {
       sources = { "filesystem", "dotnet-tree" },
       ["dotnet-tree"] = {
+        follow_current_file = {  -- |dotnet-tree-follow-current-file|
+          enabled = false,
+          leave_dirs_open = false,
+        },
         window = {
           position = "left",
           width = 40,
