@@ -9,6 +9,8 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-06
+
 ### Added
 
 - `follow_current_file`, the same option the filesystem source has: on
@@ -19,14 +21,6 @@ mappings may land in a minor release; they will always be listed here.
   every `:Neotree dotnet-tree` reveal the current file
   (`|dotnet-tree-follow-current-file|`, #43).
 
-### Fixed
-
-- `:Neotree reveal` left the cursor on the solution instead of the current
-  file. neo-tree hands the source the path to reveal, and `navigate` passed
-  it to `renderer.focus_node`, which looks a node up by id; the ids here are
-  not paths. The lookup now goes through an index from path to node, and
-  the folders above the file are expanded (`|dotnet-tree-reveal|`, #43).
-
 ### Changed
 
 - The terminal `r`, `t`, `w` and `a` open is named after what it runs and on
@@ -34,10 +28,18 @@ mappings may land in a minor release; they will always be listed here.
   Api.Tests` — instead of the `term://` command line, and the label is shown
   in the split's winbar, so a run and a watch side by side are told apart. A
   second terminal for the same command gets a number: `run Api (2)`
-  (`|dotnet-tree-quickfix|`).
+  (`|dotnet-tree-quickfix|`, #41).
 - That terminal buffer is unlisted, so a bufferline no longer shows it next
   to the files, where clicking it opened the terminal in the editor window.
-  `:ls!` still lists it.
+  `:ls!` still lists it (#41).
+
+### Fixed
+
+- `:Neotree reveal` left the cursor on the solution instead of the current
+  file. neo-tree hands the source the path to reveal, and `navigate` passed
+  it to `renderer.focus_node`, which looks a node up by id; the ids here are
+  not paths. The lookup now goes through an index from path to node, and
+  the folders above the file are expanded (`|dotnet-tree-reveal|`, #43).
 
 ## [0.2.0] - 2026-11-02
 
@@ -312,7 +314,8 @@ projects.
   [#10](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/10),
   and fixed after `0.1.2` — see Unreleased.
 
-[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.0...v0.1.1
