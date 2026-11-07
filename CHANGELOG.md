@@ -9,6 +9,8 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-07
+
 ### Fixed
 
 - The tree now follows neo-tree's `default_component_configs.indent`, so
@@ -322,7 +324,8 @@ projects.
   [#10](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/10),
   and fixed after `0.1.2` — see Unreleased.
 
-[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.1.1...v0.1.2
