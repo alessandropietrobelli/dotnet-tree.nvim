@@ -39,14 +39,14 @@ M.default_config = {
   },
   renderers = {
     directory = {
-      { "indent", with_expanders = false },
+      { "indent" },
       { "icon" },
       { "name" },
       { "diagnostics" },
       { "git_status" },
     },
     file = {
-      { "indent", with_expanders = false },
+      { "indent" },
       { "icon" },
       { "name" },
       { "diagnostics" },
