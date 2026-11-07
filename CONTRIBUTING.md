@@ -65,6 +65,22 @@ The install instructions live in two places — `README.md` and
 `doc/dotnet-tree.txt` — and `check-docs-consistency.lua` fails if they disagree.
 If it stops you, edit whichever file it names rather than relaxing the check.
 
+## Commit messages
+
+Pull requests are squash-merged, so the pull request title becomes the commit
+title on `main`. Write it the way the history already reads:
+
+- An imperative sentence, capitalised, with no trailing period:
+  *Add…*, *Fix…*, *Read…*, *Say…*.
+- Say what changes for someone using the plugin, not which file you touched:
+  *Debug the project under the cursor with `d`* rather than *Update debug.lua*.
+- End with the issue it closes and then the pull request, in parentheses:
+  `(#41) (#42)`. A pull request with no issue gets just its own number.
+- A release is its own commit, titled `Release X.Y.Z` and nothing else.
+
+The body, when there is one, explains why the change is needed; what changed is
+in the diff. Close the issue in the last line, as `Closes #41`.
+
 ## Code layout
 
 | Path | Responsibility |
