@@ -9,6 +9,14 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+### Fixed
+
+- The tree now follows neo-tree's `default_component_configs.indent`, so
+  expanders configured once for every source show here too. The default
+  renderers no longer set `with_expanders = false` on the indent component,
+  which overrode the global setting
+  ([#46](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/46)).
+
 ## [0.3.0] - 2026-11-06
 
 ### Added
