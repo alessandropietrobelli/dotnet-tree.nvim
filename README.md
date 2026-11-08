@@ -29,7 +29,9 @@ This source renders that graph.
 - **Both solution formats** — legacy `.sln` and the newer XML `.slnx`
 - **Solution folders** rendered as real nodes, nested as declared
 - **Projects** with their `.csproj` pinned on top, package references and project references
-- **Central Package Management** — resolves versions from `Directory.Packages.props`
+- **Central Package Management** — resolves versions from the `Directory.Packages.props`
+  nearest to each project, following the import that chains a nested one to the root one;
+  central versions are marked `ⓒ`, a project's `VersionOverride` is marked `override`
 - **LSP diagnostics** and **git status** propagated onto tree nodes — with a language server
   configured for background analysis over the whole solution (for example roslyn.nvim's
   `dotnet_analyzer_diagnostics_scope = "fullSolution"`), markers appear on files you have not

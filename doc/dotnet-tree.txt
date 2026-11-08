@@ -24,6 +24,11 @@ the newer XML `.slnx` format, resolves package versions through Central
 Package Management (`Directory.Packages.props`), and runs `dotnet` CLI actions
 on the node under the cursor.
 
+A package node shows the version the build uses. `ⓒ` marks a version from
+the `Directory.Packages.props` nearest to the project (and the file it
+imports with `GetPathOfFileAbove`); `override` marks a version the project
+pins with `VersionOverride`.
+
 It is implemented as a custom source for neo-tree.nvim, not as a standalone
 tree plugin. See |dotnet-tree-installation|.
 

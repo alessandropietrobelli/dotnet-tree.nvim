@@ -1,0 +1,16 @@
+<Project>
+  <!-- The top of every chain in these fixtures: it must not import anything,
+       or the walk would reach tests/fixtures/Directory.Packages.props. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageVersion Include="Serilog" Version="4.0.0" />
+    <PackageVersion Include="xunit" Version="2.9.0" />
+    <PackageVersion Include="Empty.Override" Version="5.0.0" />
+    <!-- A duplicate: NuGet warns (NU1506) and keeps the first. -->
+    <PackageVersion Include="Dupe.InFile" Version="1.0.0" />
+    <PackageVersion Include="Dupe.InFile" Version="2.0.0" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" VersionOverride="13.0.1" />
+    <PackageReference Include="Serilog" />
+    <!-- Empty: the central version applies. -->
+    <PackageReference Include="Empty.Override" VersionOverride="" />
+    <PackageReference Include="Dupe.InFile" />
+    <PackageReference Include="xunit">
+      <VersionOverride>2.8.0</VersionOverride>
+    </PackageReference>
+  </ItemGroup>
+</Project>

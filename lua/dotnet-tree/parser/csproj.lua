@@ -204,7 +204,10 @@ function M.parse(csproj_path)
     if include and not seen_pkg[include] then
       seen_pkg[include] = true
       local version = xml.attr_ci(node.attrs, "Version") or xml.child_text(node, "Version") or ""
-      table.insert(result.packages, { name = include, version = version })
+      -- Under central package management a project pins its own version with
+      -- VersionOverride, in either form; it beats the central one (#56).
+      local override = xml.attr_ci(node.attrs, "VersionOverride") or xml.child_text(node, "VersionOverride")
+      table.insert(result.packages, { name = include, version = version, override = override })
     end
   end
 

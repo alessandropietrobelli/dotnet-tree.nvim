@@ -1,0 +1,10 @@
+<Project>
+  <!-- No import: MSBuild stops at the nearest file, and so does the tree.
+       Without the root file, this one has to turn central management on. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Serilog" Version="2.0.0" />
+  </ItemGroup>
+</Project>

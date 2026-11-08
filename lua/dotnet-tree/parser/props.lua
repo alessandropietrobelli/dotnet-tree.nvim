@@ -8,9 +8,11 @@
 -- with the same upward walk and the same stopping rule cpm.lua already uses
 -- for `Directory.Packages.props`.
 --
--- One `Import` is followed, and only one form of it: the
+-- One `Import` is followed: the
 -- `$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', ...))` that a
--- `src/Directory.Build.props` uses to chain to the repository-root one (#30).
+-- `src/Directory.Build.props` uses to chain to the repository-root one (#30),
+-- with the file name quoted or bare. cpm.lua follows the same import for
+-- Directory.Packages.props (#56).
 -- Stopping at the nearest file was right for jellyfin, whose nearest props
 -- file names the framework itself, and wrong for every repository that splits
 -- rules between `src/` and `tests/`: there the nearest file names no framework
@@ -110,27 +112,37 @@ end
 
 -- Whether a props file chains to the one above it with the single import form
 -- in scope: `<Import Project="$([MSBuild]::GetPathOfFileAbove(
--- 'Directory.Build.props', ...))" />`. Only the file name argument is read --
--- the second argument is a start directory, and "the nearest
--- Directory.Build.props strictly above this one" is what every use of it in a
--- repository root chain means. A path built out of a `$(Property)` is not
--- resolved, so an import whose file name argument is not a literal
--- `Directory.Build.props` is not followed.
+-- 'Directory.Build.props', ...))" />`, the file name quoted or bare.
+-- `filename` is the file chained to: Directory.Build.props by default,
+-- Directory.Packages.props for cpm.lua (#56). Only the file name argument is
+-- read -- the second argument is a start directory, and "the nearest file of
+-- that name strictly above this one" is what every use of it in a repository
+-- root chain means. A path built out of a `$(Property)` is not resolved, so an
+-- import whose file name argument is not the literal `filename` is not
+-- followed.
 --
--- A `Condition` on the import is not decided. Following it anyway is safe here
--- and nowhere else in this file: an inherited framework is only ever consulted
--- when neither the project nor any nearer props file named one, so the choice
--- is between a candidate and nothing at all -- not between two answers.
-local function imports_file_above(root)
+-- A `Condition` on the import is not decided. For Directory.Build.props that
+-- is safe: an inherited framework is only ever consulted when neither the
+-- project nor any nearer props file named one, so the choice is between a
+-- candidate and nothing at all -- not between two answers. For
+-- Directory.Packages.props it is an accepted inaccuracy: a conditional chain
+-- is followed as if the condition held.
+function M.imports_file_above(root, filename)
+  filename = (filename or "Directory.Build.props"):lower()
   for _, node in ipairs(xml.find_all(root, "Import")) do
     local project = xml.attr_ci(node.attrs, "Project") or ""
-    local arg = project:match("GetPathOfFileAbove%s*%(%s*['\"]([^'\"]+)['\"]")
-    if arg and arg:lower() == "directory.build.props" then
+    -- The file name may be quoted or not: NuGet's central package management
+    -- docs write it bare, `GetPathOfFileAbove(Directory.Packages.props, ...)`,
+    -- and repositories write Directory.Build.props chains that way too.
+    local arg = project:match("GetPathOfFileAbove%s*%(%s*['\"]?([^'\",%)]+)")
+    arg = arg and vim.trim(arg)
+    if arg and arg:lower() == filename then
       return true
     end
   end
   return false
 end
+local imports_file_above = M.imports_file_above
 
 -- One props file, parsed once per (path, mtime): the frameworks it names and
 -- whether it chains upward.

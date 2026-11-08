@@ -1,0 +1,6 @@
+<Project>
+  <!-- No quotes around the arguments, the form NuGet's documentation shows
+       for Directory.Packages.props. It names no framework, so the one above
+       must be followed. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Build.props, $(MSBuildThisFileDirectory)../))" />
+</Project>

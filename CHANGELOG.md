@@ -22,6 +22,19 @@ mappings may land in a minor release; they will always be listed here.
   waits for it either. When git fails, the markers already shown are kept and
   the error is reported once, instead of the tree turning clean
   ([#49](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/49)).
+- A package pinned with `VersionOverride` shows that version, marked `override`,
+  instead of the central version marked `ⓒ`. Central versions come from the
+  `Directory.Packages.props` nearest to each project, as MSBuild reads them,
+  not from the one nearest to the solution. A nested file that imports the
+  root one inherits its versions and can change them with `Update`; a package
+  defined in both keeps the root's version, as NuGet does (NU1506). Package
+  ids are matched ignoring case
+  ([#56](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/56)).
+- An `Import` of the file above written without quotes,
+  `GetPathOfFileAbove(Directory.Build.props, ...)`, is followed like the
+  quoted form; NuGet's documentation writes the `Directory.Packages.props` one
+  that way. Before, a project relying on it for its framework had none
+  ([#56](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/56)).
 
 ### Changed
 

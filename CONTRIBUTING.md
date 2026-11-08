@@ -16,7 +16,9 @@ Please include:
   sanitised. The `.csproj` and `.props` readers now read an element tree, and
   `TargetFramework`/`TargetFrameworks` are also read from the nearest
   `Directory.Build.props` and from the file it chains to with
-  `GetPathOfFileAbove`, but MSBuild is still not evaluated — a `$(Property)`
+  `GetPathOfFileAbove` (package versions likewise from the nearest
+  `Directory.Packages.props` and the file it chains to), but MSBuild is still
+  not evaluated — a `$(Property)`
   comes back as written, a `Condition` is not decided, no other `Import` is
   followed, and no other property is inherited. The one property that *is*
   evaluated is the output path: `d` asks
