@@ -140,14 +140,9 @@ function M.warn_without_azurite(dir, name)
   end
   M.azurite_listening(function(listening)
     if not listening then
-      vim.notify(
-        ("[dotnet-tree] %s uses UseDevelopmentStorage=true, but Azurite is not listening on %s:%d. Start it with `azurite`."):format(
-          name,
-          M.azurite_host,
-          M.azurite_port
-        ),
-        vim.log.levels.WARN
-      )
+      local msg = "[dotnet-tree] %s uses UseDevelopmentStorage=true, but Azurite is not listening on %s:%d. "
+        .. "Start it with `azurite`."
+      vim.notify(msg:format(name, M.azurite_host, M.azurite_port), vim.log.levels.WARN)
     end
   end)
 end
