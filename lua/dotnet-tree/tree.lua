@@ -55,7 +55,7 @@ local function walk_dir(dir, id_prefix)
   return items
 end
 
-local function build_project_node(proj, cpm_versions)
+local function build_project_node(proj)
   local children = {}
   local csproj = proj.path and csproj_parser.parse(proj.path) or nil
 
@@ -110,16 +110,21 @@ local function build_project_node(proj, cpm_versions)
       table.sort(csproj.packages, function(a, b)
         return a.name:lower() < b.name:lower()
       end)
+      -- The versions of the Directory.Packages.props nearest to this project,
+      -- not to the solution: MSBuild looks from the project (#56).
+      local cpm_versions = cpm_parser.versions_for(csproj.dir)
       for _, pkg in ipairs(csproj.packages) do
-        local version = pkg.version
-        local from_cpm = false
-        if (not version or version == "") and cpm_versions and cpm_versions[pkg.name] then
-          version = cpm_versions[pkg.name]
-          from_cpm = true
+        -- What the build uses: the project's VersionOverride, then the central
+        -- version, then a Version written in the project.
+        local version, from_cpm, override = pkg.version, false, false
+        if pkg.override and pkg.override ~= "" then
+          version, override = pkg.override, true
+        elseif (not version or version == "") and cpm_versions and cpm_versions[pkg.name] then
+          version, from_cpm = cpm_versions[pkg.name], true
         end
         local label
         if version and version ~= "" then
-          label = pkg.name .. "  " .. version .. (from_cpm and "  ⓒ" or "")
+          label = pkg.name .. "  " .. version .. (from_cpm and "  ⓒ" or override and "  override" or "")
         else
           label = pkg.name
         end
@@ -127,7 +132,10 @@ local function build_project_node(proj, cpm_versions)
           id = "dotnet:pkg:" .. proj.guid .. ":" .. pkg.name,
           name = label,
           type = "file",
-          extra = { kind = "package", package = { name = pkg.name, version = version, from_cpm = from_cpm } },
+          extra = {
+            kind = "package",
+            package = { name = pkg.name, version = version, from_cpm = from_cpm, override = override },
+          },
         })
       end
       table.insert(deps_children, {
@@ -180,7 +188,7 @@ local function make_solution_item_node(item, owner_guid)
   }
 end
 
-local function build_folder_node(folder, sln, cpm_versions)
+local function build_folder_node(folder, sln)
   local children = {}
   if folder.solution_items then
     for _, item in ipairs(folder.solution_items) do
@@ -192,9 +200,9 @@ local function build_folder_node(folder, sln, cpm_versions)
     if child then
       local node
       if child.kind == "folder" then
-        node = build_folder_node(child, sln, cpm_versions)
+        node = build_folder_node(child, sln)
       else
-        node = build_project_node(child, cpm_versions)
+        node = build_project_node(child)
       end
       if node then
         table.insert(children, node)
@@ -224,20 +232,14 @@ function M.build(sln_path)
     return nil, err
   end
 
-  local cpm_versions = nil
-  local cpm_path = cpm_parser.find_props(sln.dir)
-  if cpm_path then
-    cpm_versions = cpm_parser.parse(cpm_path)
-  end
-
   local roots = {}
   for _, proj in ipairs(sln.projects) do
     if not proj.parent_guid then
       local node
       if proj.kind == "folder" then
-        node = build_folder_node(proj, sln, cpm_versions)
+        node = build_folder_node(proj, sln)
       else
-        node = build_project_node(proj, cpm_versions)
+        node = build_project_node(proj)
       end
       if node then
         table.insert(roots, node)

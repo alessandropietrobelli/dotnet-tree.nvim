@@ -170,6 +170,14 @@ describe("parser.csproj", function()
     assert.are.same({ "net9.0" }, result.target_frameworks)
   end)
 
+  -- Microsoft's documentation writes the import without quotes (#56). Only the
+  -- quoted form used to be recognised, so this chain stopped at the nearest
+  -- file and the project had no framework.
+  it("follows the import written without quotes", function()
+    local result = csproj.parse(FIXTURES .. "/props/chain/bare/Lib/Lib.csproj")
+    assert.are.same({ "net9.0" }, result.target_frameworks)
+  end)
+
   -- Same import order as the project body: MSBuild imports the file above
   -- before reading the rest of the importing file, so a framework written in
   -- the importing props file wins over the imported one.
@@ -396,6 +404,81 @@ describe("parser.cpm", function()
 
   it("finds the props file by walking up from a directory", function()
     assert.are.equal(FIXTURES .. "/Directory.Packages.props", cpm.find_props(FIXTURES))
+  end)
+end)
+
+-- #56: the version a package node shows is the one the build uses. A
+-- project's VersionOverride beats the central version, and the central version
+-- comes from the Directory.Packages.props nearest to the project, following
+-- the import a nested file uses to chain to the root one.
+--
+-- tests/fixtures/cpm: a root props file; Api overrides two versions; Legacy has
+-- a props file that imports the root one and updates Serilog; Island has one
+-- that imports nothing.
+describe("package versions under central package management (#56)", function()
+  local CPM = FIXTURES .. "/cpm"
+
+  before_each(function()
+    cpm.invalidate()
+    csproj.invalidate()
+  end)
+
+  -- Package node labels and data, by project name.
+  local function packages()
+    local items = require("dotnet-tree.tree").build(CPM .. "/App.slnx")
+    local found = {}
+    local function walk(nodes, project)
+      for _, node in ipairs(nodes) do
+        local kind = node.extra and node.extra.kind
+        if kind == "project" then
+          project = node.name
+          found[project] = {}
+        elseif kind == "package" then
+          found[project][node.extra.package.name] = { label = node.name, data = node.extra.package }
+        end
+        walk(node.children or {}, project)
+      end
+    end
+    walk(items, nil)
+    return found
+  end
+
+  it("reads VersionOverride as an attribute and as a child element", function()
+    local parsed = csproj.parse(CPM .. "/Api/Api.csproj")
+    local by_name = {}
+    for _, pkg in ipairs(parsed.packages) do
+      by_name[pkg.name] = pkg
+    end
+    assert.are.equal("13.0.1", by_name["Newtonsoft.Json"].override)
+    assert.are.equal("2.8.0", by_name["xunit"].override)
+    assert.is_nil(by_name["Serilog"].override)
+  end)
+
+  it("shows the overriding version, marked as an override rather than central", function()
+    local api = packages()["Api"]
+    assert.are.equal("Newtonsoft.Json  13.0.1  override", api["Newtonsoft.Json"].label)
+    assert.are.equal("xunit  2.8.0  override", api["xunit"].label)
+    assert.are.equal("Serilog  4.0.0  ⓒ", api["Serilog"].label)
+    assert.is_true(api["Newtonsoft.Json"].data.override)
+    assert.is_false(api["Newtonsoft.Json"].data.from_cpm)
+  end)
+
+  it("uses the props file nearest to each project, and the one it imports", function()
+    local legacy = packages()["Legacy"]
+    assert.are.equal("Serilog  3.1.1  ⓒ", legacy["Serilog"].label, "updated by the nested file")
+    assert.are.equal("Newtonsoft.Json  13.0.3  ⓒ", legacy["Newtonsoft.Json"].label, "inherited from the root")
+    assert.are.equal("Legacy.Only  1.0.0  ⓒ", legacy["Legacy.Only"].label, "defined by the nested file")
+    assert.are.equal("Never.Defined", legacy["Never.Defined"].label, "an Update defines nothing")
+  end)
+
+  it("stops at a nested props file that imports nothing, as MSBuild does", function()
+    local island = packages()["Island"]
+    assert.are.equal("Serilog  2.0.0  ⓒ", island["Serilog"].label)
+    assert.are.equal("Newtonsoft.Json", island["Newtonsoft.Json"].label)
+  end)
+
+  it("gives no central versions to a project with no props file above it", function()
+    assert.is_nil(cpm.versions_for("/"))
   end)
 end)
 

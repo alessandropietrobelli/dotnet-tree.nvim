@@ -1,0 +1,6 @@
+<Project>
+  <!-- No import: MSBuild stops at the nearest file, and so does the tree. -->
+  <ItemGroup>
+    <PackageVersion Include="Serilog" Version="2.0.0" />
+  </ItemGroup>
+</Project>

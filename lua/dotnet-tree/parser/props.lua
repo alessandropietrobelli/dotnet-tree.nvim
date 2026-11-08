@@ -121,16 +121,24 @@ end
 -- and nowhere else in this file: an inherited framework is only ever consulted
 -- when neither the project nor any nearer props file named one, so the choice
 -- is between a candidate and nothing at all -- not between two answers.
-local function imports_file_above(root)
+--
+-- `filename` is the file chained to: Directory.Packages.props uses the same
+-- form to chain to the repository-root one (#56).
+function M.imports_file_above(root, filename)
+  filename = (filename or "Directory.Build.props"):lower()
   for _, node in ipairs(xml.find_all(root, "Import")) do
     local project = xml.attr_ci(node.attrs, "Project") or ""
-    local arg = project:match("GetPathOfFileAbove%s*%(%s*['\"]([^'\"]+)['\"]")
-    if arg and arg:lower() == "directory.build.props" then
+    -- The file name may be quoted or not: Microsoft's own examples write it
+    -- bare, `GetPathOfFileAbove(Directory.Build.props, ...)`.
+    local arg = project:match("GetPathOfFileAbove%s*%(%s*['\"]?([^'\",%)]+)")
+    arg = arg and vim.trim(arg)
+    if arg and arg:lower() == filename then
       return true
     end
   end
   return false
 end
+local imports_file_above = M.imports_file_above
 
 -- One props file, parsed once per (path, mtime): the frameworks it names and
 -- whether it chains upward.

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Api/Api.csproj" />
+  <Project Path="Legacy/Legacy.csproj" />
+  <Project Path="Island/Island.csproj" />
+</Solution>

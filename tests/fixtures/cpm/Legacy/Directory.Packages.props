@@ -1,0 +1,9 @@
+<Project>
+  <!-- Chains to the repository-root file, then changes what Legacy needs. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Packages.props, $(MSBuildThisFileDirectory)..))" />
+  <ItemGroup>
+    <PackageVersion Update="Serilog" Version="3.1.1" />
+    <PackageVersion Include="Legacy.Only" Version="1.0.0" />
+    <PackageVersion Update="Never.Defined" Version="9.9.9" />
+  </ItemGroup>
+</Project>

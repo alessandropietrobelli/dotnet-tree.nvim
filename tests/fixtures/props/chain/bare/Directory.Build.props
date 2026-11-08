@@ -1,0 +1,5 @@
+<Project>
+  <!-- The form Microsoft's documentation shows: no quotes around the
+       arguments. It names no framework, so the one above must be followed. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Build.props, $(MSBuildThisFileDirectory)../))" />
+</Project>
