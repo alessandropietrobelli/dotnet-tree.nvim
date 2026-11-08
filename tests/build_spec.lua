@@ -251,4 +251,37 @@ describe("build.build", function()
     assert.are.same({ "dotnet", "build", "/nowhere/Some.csproj" }, recorded[1])
     assert.are.same({ "dotnet", "clean", "/nowhere/Some.csproj", "-c", "Debug" }, recorded[2])
   end)
+
+  -- #40: the start notification is what someone copies to reproduce a failed
+  -- build, so it has to carry the same arguments as the command that ran (the
+  -- path is shortened to its file name).
+  --
+  -- The fake job never exits, so build.build keeps each path marked as
+  -- running: every call here uses a path no other test uses.
+  it("announces the arguments it runs with", function()
+    local messages = {}
+    local previous = { jobstart = vim.fn.jobstart, executable = vim.fn.executable, notify = vim.notify }
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.jobstart = function()
+      return 1
+    end
+    -- So the test does not depend on the dotnet SDK being installed.
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.executable = function()
+      return 1
+    end
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.notify = function(msg)
+      table.insert(messages, msg)
+    end
+    build.build("/nowhere/Plain.csproj")
+    build.build("/nowhere/Debugged.csproj", { args = { "-c", "Debug" } })
+    build.build("/nowhere/Quiet.csproj", { notify = false, args = { "-c", "Debug" } })
+    vim.fn.jobstart, vim.fn.executable, vim.notify = previous.jobstart, previous.executable, previous.notify
+
+    assert.are.same({
+      "[dotnet-tree] dotnet build Plain.csproj",
+      "[dotnet-tree] dotnet build Debugged.csproj -c Debug",
+    }, messages)
+  end)
 end)
