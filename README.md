@@ -46,9 +46,12 @@ This source renders that graph.
 - **Build errors in the quickfix list**, deduplicated and jumpable — including the ones no
   language server can see, such as a failed restore, which stops compilation before any
   compiler error is reported. `run`, `test` and `watch` stay in a terminal, where their
-  output is interactive. Each one is labelled in its own winbar with what it runs (`run Api`,
+  output is interactive, started in the project's folder. Each one is labelled in its own winbar with what it runs (`run Api`,
   `watch test Api.Tests`), and stays out of a bufferline, so clicking a tab never opens a
   terminal in the editor window
+- **Azure Functions apps** run with `r` like any other project: `dotnet run` on the isolated
+  worker SDK 2.x, `func start` on an in-process app or worker SDK 1.x, with a warning when the
+  app uses `UseDevelopmentStorage=true` and Azurite is not running
 - **Multiple solutions** — pick one with `s`; the choice is remembered per working directory
   in `stdpath("state")/dotnet-tree/solutions.json`
 - **Follow the current file** — `:Neotree dotnet-tree reveal` puts the cursor on the file you
@@ -247,7 +250,9 @@ opts = {
 ## Troubleshooting
 
 Run `:checkhealth dotnet-tree` first — it verifies neo-tree is installed, that the source is
-registered, and that `dotnet` is on your `PATH`.
+registered, and that `dotnet` is on your `PATH`. It also names a solution it cannot read and a
+project the solution lists that is no longer on disk and, when a solution has an Azure Functions
+app, whether `func` is installed and Azurite is listening.
 
 **`Invalid argument: dotnet-tree`** (from `neo-tree/command/parser.lua`) — `"dotnet-tree"` is
 missing from `opts.sources`. See the callout in [Installation](#installation).
