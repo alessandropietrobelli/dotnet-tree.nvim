@@ -15,6 +15,19 @@ mappings may land in a minor release; they will always be listed here.
   now shows `dotnet build Foo.csproj -c Debug`, the build it actually starts,
   instead of leaving out `-c Debug`
   ([#40](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/40)).
+- The editor no longer stalls while you type on a large solution. A diagnostics
+  change used to rebuild the whole tree, rescanning every project and waiting
+  for `git status`; it now only redraws it (on jellyfin, 57 ms down to under
+  1 ms). Git status is read in the background, so a full rebuild no longer
+  waits for it either
+  ([#49](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/49)).
+
+### Changed
+
+- Files created outside Neovim show up on `R`, not at the next diagnostics
+  change. That was a side effect of the rebuild removed in #49. Writing a new
+  file from Neovim, or writing any file the tree shows, still updates the tree
+  and its git markers.
 
 ## [0.3.1] - 2026-11-07
 

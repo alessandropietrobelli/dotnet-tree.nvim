@@ -53,8 +53,9 @@ This source renders that graph.
   are editing, expanding the project and folders above it, and `follow_current_file` does it
   on every buffer switch without leaving the editor, as the filesystem source does. Folders
   you open or close yourself are left alone
-- **Auto refresh** on `DiagnosticChanged` and on writing `*.csproj`, `*.sln`, `*.slnx`,
-  `Directory.Packages.props`
+- **Auto refresh** without stalling the editor: diagnostics redraw the tree, writing a
+  project, solution or `Directory.Packages.props` rebuilds it, writing a new file in a project
+  adds it, and git status is read in the background
 - **Works with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim)** when it is
   installed: `a` on a project's Packages opens its window to search and install, with that
   project picked; `a` on a package opens it on that package — versions per project, updates,
