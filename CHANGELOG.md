@@ -9,6 +9,13 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+### Fixed
+
+- The notification that announces a build lists the arguments it runs with: `d`
+  now shows `dotnet build Foo.csproj -c Debug`, the build it actually starts,
+  instead of leaving out `-c Debug`
+  ([#40](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/40)).
+
 ## [0.3.1] - 2026-11-07
 
 ### Fixed

@@ -254,7 +254,12 @@ function M.build(path, opts)
   end
 
   if opts.notify ~= false then
-    vim.notify(("[dotnet-tree] dotnet %s %s"):format(action, vim.fn.fnamemodify(path, ":t")))
+    -- Built from the same pieces as `cmd`, so the message says what runs: `d`
+    -- passes `-c Debug`, and a line that leaves it out describes another build
+    -- (#40). Only the path is shortened, to the file name.
+    local shown = { "dotnet", action, vim.fn.fnamemodify(path, ":t") }
+    vim.list_extend(shown, opts.args or {})
+    vim.notify("[dotnet-tree] " .. table.concat(shown, " "))
   end
 
   local ok, job = pcall(vim.fn.jobstart, cmd, {

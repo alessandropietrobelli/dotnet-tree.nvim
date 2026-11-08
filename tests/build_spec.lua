@@ -251,4 +251,27 @@ describe("build.build", function()
     assert.are.same({ "dotnet", "build", "/nowhere/Some.csproj" }, recorded[1])
     assert.are.same({ "dotnet", "clean", "/nowhere/Some.csproj", "-c", "Debug" }, recorded[2])
   end)
+
+  -- #40: the start notification is what someone copies to reproduce a failed
+  -- build, so it has to carry the same arguments as the command that ran.
+  it("announces the arguments it runs with", function()
+    local messages = {}
+    local previous_jobstart, previous_notify = vim.fn.jobstart, vim.notify
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.jobstart = function()
+      return 1
+    end
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.notify = function(msg)
+      table.insert(messages, msg)
+    end
+    build.build("/nowhere/Plain.csproj")
+    build.build("/nowhere/Debugged.csproj", { args = { "-c", "Debug" } })
+    vim.fn.jobstart, vim.notify = previous_jobstart, previous_notify
+
+    assert.are.same({
+      "[dotnet-tree] dotnet build Plain.csproj",
+      "[dotnet-tree] dotnet build Debugged.csproj -c Debug",
+    }, messages)
+  end)
 end)
