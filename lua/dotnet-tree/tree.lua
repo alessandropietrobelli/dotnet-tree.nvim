@@ -267,9 +267,9 @@ function M.build(sln_path)
   -- Painting the known status runs no git; a failure here is a bug, reported
   -- once rather than taking the tree down with it.
   local git = require("dotnet-tree.git")
-  local ok, err = pcall(git.apply_to_tree, items, sln.dir)
-  if not ok then
-    git.warn_once("git-apply", "painting git status failed: " .. tostring(err))
+  local painted, paint_err = pcall(git.apply_to_tree, items, sln.dir)
+  if not painted then
+    git.warn_once("git-apply", "painting git status failed: " .. tostring(paint_err))
   end
 
   return items
