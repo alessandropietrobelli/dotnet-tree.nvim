@@ -174,6 +174,17 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 | `t` | test project — in a terminal split |
 | `w` | watch (run / test / build) — in a terminal split |
 
+`r`, `t` and `w` start in the project's folder, not in Neovim's working directory, so an
+ASP.NET Core app finds its `appsettings.json` wherever Neovim was opened. An Azure Functions
+app (its `.csproj` sets `<AzureFunctionsVersion>`, references `Microsoft.NET.Sdk.Functions` or
+`Microsoft.Azure.Functions.Worker.Sdk`, or its folder has a `host.json`) needs
+[Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
+(`func`) on `PATH`: `r` runs `dotnet run` on `Microsoft.Azure.Functions.Worker.Sdk` 2.x, which
+starts the host itself, and `func start` on an in-process app or Worker SDK 1.x, which `w` →
+run cannot start and refuses. When `local.settings.json` sets
+`"AzureWebJobsStorage": "UseDevelopmentStorage=true"`, `r` and `w` → run check that Azurite is
+listening on `127.0.0.1:10000` and warn if it is not; the app starts anyway.
+
 `d` resolves the project's own output — `OutputType` decides whether there is anything to
 launch, and when the project does not declare one its SDK does (`Microsoft.NET.Sdk.Web` and
 `Microsoft.NET.Sdk.Worker` build applications, which is why an ASP.NET Core project has no

@@ -145,6 +145,28 @@ function M.versions_for(dir)
   return versions
 end
 
+--- The version a project gets for one of its PackageReferences, given the
+--- central versions that apply to it (#56): the project's VersionOverride
+--- first; then a Version written in the project, which only a project outside
+--- central package management may have (NuGet rejects it otherwise, NU1008);
+--- then the central version, matched ignoring case as NuGet matches ids.
+---@param pkg { name: string, version: string|nil, override: string|nil }
+---@param central table<string, string>|nil from versions_for
+---@return string|nil version, "override"|"central"|nil source
+function M.resolve(pkg, central)
+  if pkg.override and pkg.override ~= "" then
+    return pkg.override, "override"
+  end
+  if pkg.version and pkg.version ~= "" then
+    return pkg.version, nil
+  end
+  local version = central and central[pkg.name:lower()]
+  if version then
+    return version, "central"
+  end
+  return nil, nil
+end
+
 -- Same upward walk as every other implicitly imported MSBuild file; it lives
 -- in parser/props.lua so the Directory.Build.props lookup and this one cannot
 -- drift apart.

@@ -87,13 +87,15 @@ function M.check()
   if #solutions > 0 then
     ok(("%d solution(s) found under %s"):format(#solutions, cwd))
     for _, sln in ipairs(solutions) do
-      ok("  " .. sln)
+      M.check_solution(sln)
     end
   else
     warn("no .sln/.slnx found under " .. cwd, {
       "Open Neovim at the repository root, or press `s` in the tree to pick one.",
     })
   end
+
+  M.check_functions(solutions)
 
   local persisted = require("dotnet-tree.store").get(cwd)
   if persisted then
@@ -104,6 +106,100 @@ function M.check()
         "Press `s` in the tree to select a different one.",
       })
     end
+  end
+end
+
+--- One solution found: whether it can be read, and whether the projects it
+--- lists are on disk. `r`, `t` and `w` start in a project's folder, so a
+--- project that is gone cannot be run, and this is where to find out why.
+---@param sln_path string
+function M.check_solution(sln_path)
+  local sln, parse_err = require("dotnet-tree.parser.solution").parse(sln_path)
+  if not sln then
+    warn("  " .. sln_path .. " could not be read: " .. tostring(parse_err), {
+      "The tree cannot show it; open the file to check that it is a valid solution.",
+    })
+    return
+  end
+  ok("  " .. sln_path)
+  for _, proj in ipairs(sln.projects) do
+    if proj.kind ~= "folder" and proj.path and vim.fn.filereadable(proj.path) == 0 then
+      warn("    listed but not on disk: " .. proj.path, {
+        "The solution still lists this project; `r`, `t` and `w` cannot run it.",
+      })
+    end
+  end
+end
+
+-- The function apps of `solutions`, by project path. A solution that cannot
+-- be read was reported by check_solution.
+local function function_apps(solutions)
+  local functions = require("dotnet-tree.functions")
+  local apps = {}
+  for _, sln_path in ipairs(solutions) do
+    local sln = require("dotnet-tree.parser.solution").parse(sln_path)
+    for _, proj in ipairs(sln and sln.projects or {}) do
+      if proj.kind ~= "folder" and proj.path and not apps[proj.path] then
+        local app = functions.detect(proj.path)
+        if app then
+          apps[proj.path] = app
+        end
+      end
+    end
+  end
+  return apps
+end
+
+--- What `r` and `w` need for the Azure Functions apps of `solutions` (#57): `func`,
+--- and Azurite for an app that keeps its storage there. Says nothing when no
+--- solution has a function app.
+---@param solutions string[]
+function M.check_functions(solutions)
+  local apps = function_apps(solutions)
+  if next(apps) == nil then
+    return
+  end
+  local functions = require("dotnet-tree.functions")
+  report_start("dotnet-tree: Azure Functions")
+
+  if vim.fn.executable("func") == 1 then
+    ok("Azure Functions Core Tools found (func)")
+  else
+    warn("func not found on PATH", {
+      "`r` on a function app needs Azure Functions Core Tools.",
+      "Install it: https://learn.microsoft.com/azure/azure-functions/functions-run-local",
+    })
+  end
+
+  local needs_azurite = false
+  for _, app in pairs(apps) do
+    needs_azurite = needs_azurite or functions.uses_azurite(app.dir)
+  end
+  if not needs_azurite then
+    return
+  end
+
+  local listening, problem
+  functions.azurite_listening(function(result, why)
+    listening, problem = result, why
+  end)
+  vim.wait(functions.connect_timeout_ms + 500, function()
+    return listening ~= nil
+  end, 20)
+  local where = ("%s:%d"):format(functions.azurite_host, functions.azurite_port)
+  if problem then
+    warn("could not check whether Azurite is listening on " .. where .. ": " .. problem)
+  elseif listening then
+    ok("Azurite is listening on " .. where)
+  elseif vim.fn.executable("azurite") == 1 then
+    warn("Azurite is installed but not listening on " .. where, {
+      "A function app here uses UseDevelopmentStorage=true. Start it with `azurite`.",
+    })
+  else
+    warn("Azurite not found on PATH and nothing is listening on " .. where, {
+      "A function app here uses UseDevelopmentStorage=true.",
+      "Install it with `npm install -g azurite`, or run it in Docker or from VS Code.",
+    })
   end
 end
 

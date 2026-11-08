@@ -8,6 +8,9 @@
     <!-- Empty: the central version applies. -->
     <PackageReference Include="Empty.Override" VersionOverride="" />
     <PackageReference Include="Dupe.InFile" />
+    <!-- A Version written in the project: NuGet rejects it under central
+         management (NU1008), and the tree shows what is written. -->
+    <PackageReference Include="Inline.Pinned" Version="1.2.3" />
     <PackageReference Include="xunit">
       <VersionOverride>2.8.0</VersionOverride>
     </PackageReference>

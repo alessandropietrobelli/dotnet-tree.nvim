@@ -1,0 +1,6 @@
+﻿{
+  // written by Visual Studio
+  "Values": {
+    "AzureWebJobsStorage": "usedevelopmentstorage=True"
+  }
+}

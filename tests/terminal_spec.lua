@@ -45,6 +45,47 @@ describe("terminal buffer names", function()
     assert.equals(" watch run Api", vim.wo[vim.fn.bufwinid(buf)].winbar)
   end)
 
+  it("starts the command in the folder it is given, and leaves Neovim's alone (#57)", function()
+    local cwd = vim.fn.getcwd()
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    dir = vim.fs.normalize(vim.uv.fs_realpath(dir))
+    local buf = terminal.open("pwd; sleep 5", "run Api", dir)
+    vim.cmd("stopinsert")
+    assert.is_true(
+      vim.wait(3000, function()
+        return vim.tbl_contains(vim.api.nvim_buf_get_lines(buf, 0, -1, false), dir)
+      end, 20),
+      "pwd did not print " .. dir
+    )
+    assert.are.equal(cwd, vim.fn.getcwd())
+  end)
+
+  it("passes % and # to the shell as they are, as in a C# folder", function()
+    local buf = terminal.open("echo 'src/C#/100%'; sleep 5", "run Api")
+    vim.cmd("stopinsert")
+    assert.is_true(vim.wait(3000, function()
+      return vim.tbl_contains(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "src/C#/100%")
+    end, 20))
+  end)
+
+  it("opens nothing for a folder that is gone, and says so", function()
+    local messages = {}
+    local notify = vim.notify
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.notify = function(msg, level)
+      table.insert(messages, { msg = msg, level = level })
+    end
+    local windows = #vim.api.nvim_list_wins()
+    local buf = terminal.open("true", "run Gone", "/nonexistent/dotnet-tree/Gone")
+    vim.notify = notify
+    assert.is_nil(buf)
+    assert.are.equal(windows, #vim.api.nvim_list_wins())
+    assert.are.equal(1, #messages)
+    assert.matches("cannot run Gone: /nonexistent/dotnet%-tree/Gone does not exist", messages[1].msg)
+    assert.are.equal(vim.log.levels.ERROR, messages[1].level)
+  end)
+
   it("escapes % in the winbar", function()
     assert.equals(" add 100%%Pkg to Api", terminal.winbar("add 100%Pkg to Api"))
   end)

@@ -114,17 +114,8 @@ local function build_project_node(proj)
       -- not to the solution: MSBuild looks from the project (#56).
       local cpm_versions = cpm_parser.versions_for(csproj.dir)
       for _, pkg in ipairs(csproj.packages) do
-        -- The project's VersionOverride first; then a Version written in the
-        -- project, which only a project outside central package management
-        -- may have (NuGet rejects it otherwise, NU1008); then the central
-        -- version, matched ignoring case as NuGet matches ids.
-        local version, from_cpm, override = pkg.version, false, false
-        local central = cpm_versions and cpm_versions[pkg.name:lower()]
-        if pkg.override and pkg.override ~= "" then
-          version, override = pkg.override, true
-        elseif (not version or version == "") and central then
-          version, from_cpm = central, true
-        end
+        local version, source = cpm_parser.resolve(pkg, cpm_versions)
+        local from_cpm, override = source == "central", source == "override"
         local label
         if version and version ~= "" then
           label = pkg.name .. "  " .. version .. (from_cpm and "  ⓒ" or override and "  override" or "")
