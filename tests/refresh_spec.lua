@@ -223,7 +223,8 @@ describe("refresh wiring", function()
 
   it("asks git again on focus, when a terminal closes and after fugitive", function()
     vim.api.nvim_exec_autocmds("FocusGained", {})
-    vim.api.nvim_exec_autocmds("TermClose", {})
+    -- `data` as Neovim passes it: its own TermClose handler reads it.
+    vim.api.nvim_exec_autocmds("TermClose", { data = { status = 0 } })
     vim.api.nvim_exec_autocmds("User", { pattern = "FugitiveChanged" })
     assert.are.equal(3, calls.outside)
     assert.are.equal(0, calls.rebuild)

@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/apps/">
+    <Project Path="Worker2/Worker2.csproj" />
+  </Folder>
+  <Project Path="Plain/Plain.csproj" />
+  <Project Path="Gone/Gone.csproj" />
+</Solution>

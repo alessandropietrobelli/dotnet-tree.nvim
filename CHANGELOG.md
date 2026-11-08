@@ -33,13 +33,16 @@ mappings may land in a minor release; they will always be listed here.
 - `r` starts an Azure Functions app. It used to fail from the solution root
   with `An error occurred trying to start process 'func'`: the Worker SDK 2.x
   starts the Functions host from a folder relative to where `dotnet run` was
-  launched. `r`, `t` and `w` now start in the project's folder, for every
-  project; an in-process app or one on Worker SDK 1.x, which `dotnet run`
-  cannot start, runs with `func start`. `r` stops with a message when `func`
-  is not installed, and warns when the app uses
-  `UseDevelopmentStorage=true` and Azurite is not listening.
-  `:checkhealth dotnet-tree` reports both for a solution with a function app
+  launched. `r` now starts in the project's folder; an in-process app or one
+  on Worker SDK 1.x, which `dotnet run` cannot start, runs with `func start`.
+  `r` and `w` → run stop with a message when `func` is not installed, and
+  warn when the app uses `UseDevelopmentStorage=true` and Azurite is not
+  listening. `:checkhealth dotnet-tree` reports `func`, and Azurite when an
+  app uses it
   ([#57](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/57)).
+- `r`, `t` and `w` work on a project whose path contains `%` or `#`, such as
+  a `C#` folder: `:terminal` expanded them as file names and failed with
+  `E194` or `E499`.
 - An `Import` of the file above written without quotes,
   `GetPathOfFileAbove(Directory.Build.props, ...)`, is followed like the
   quoted form; NuGet's documentation writes the `Directory.Packages.props` one
@@ -48,6 +51,12 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Changed
 
+- `r`, `t` and `w` start in the project's folder, for every project, instead
+  of Neovim's working directory: an ASP.NET Core app finds its
+  `appsettings.json` wherever Neovim was opened. A project the solution lists
+  but that is no longer on disk is reported instead of opening a terminal,
+  and `:checkhealth dotnet-tree` names it
+  ([#57](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/57)).
 - Git markers follow what happens outside Neovim: a commit, a checkout or a
   stash in another terminal, in lazygit or through fugitive. Git is asked again
   when Neovim gets the focus back, when a terminal buffer closes and after

@@ -87,7 +87,7 @@ function M.check()
   if #solutions > 0 then
     ok(("%d solution(s) found under %s"):format(#solutions, cwd))
     for _, sln in ipairs(solutions) do
-      ok("  " .. sln)
+      M.check_solution(sln)
     end
   else
     warn("no .sln/.slnx found under " .. cwd, {
@@ -109,7 +109,30 @@ function M.check()
   end
 end
 
--- The function apps of `solutions`, by project path.
+--- One solution found: whether it can be read, and whether the projects it
+--- lists are on disk. `r`, `t` and `w` start in a project's folder, so a
+--- project that is gone cannot be run, and this is where to find out why.
+---@param sln_path string
+function M.check_solution(sln_path)
+  local sln, parse_err = require("dotnet-tree.parser.solution").parse(sln_path)
+  if not sln then
+    warn("  " .. sln_path .. " could not be read: " .. tostring(parse_err), {
+      "The tree cannot show it; open the file to check that it is a valid solution.",
+    })
+    return
+  end
+  ok("  " .. sln_path)
+  for _, proj in ipairs(sln.projects) do
+    if proj.kind ~= "folder" and proj.path and vim.fn.filereadable(proj.path) == 0 then
+      warn("    listed but not on disk: " .. proj.path, {
+        "The solution still lists this project; `r`, `t` and `w` cannot run it.",
+      })
+    end
+  end
+end
+
+-- The function apps of `solutions`, by project path. A solution that cannot
+-- be read was reported by check_solution.
 local function function_apps(solutions)
   local functions = require("dotnet-tree.functions")
   local apps = {}
@@ -127,7 +150,7 @@ local function function_apps(solutions)
   return apps
 end
 
---- What `r` needs for the Azure Functions apps of `solutions` (#57): `func`,
+--- What `r` and `w` need for the Azure Functions apps of `solutions` (#57): `func`,
 --- and Azurite for an app that keeps its storage there. Says nothing when no
 --- solution has a function app.
 ---@param solutions string[]
@@ -156,15 +179,17 @@ function M.check_functions(solutions)
     return
   end
 
-  local listening
-  functions.azurite_listening(function(result)
-    listening = result
+  local listening, problem
+  functions.azurite_listening(function(result, why)
+    listening, problem = result, why
   end)
   vim.wait(functions.connect_timeout_ms + 500, function()
     return listening ~= nil
   end, 20)
   local where = ("%s:%d"):format(functions.azurite_host, functions.azurite_port)
-  if listening then
+  if problem then
+    warn("could not check whether Azurite is listening on " .. where .. ": " .. problem)
+  elseif listening then
     ok("Azurite is listening on " .. where)
   elseif vim.fn.executable("azurite") == 1 then
     warn("Azurite is installed but not listening on " .. where, {

@@ -467,6 +467,25 @@ describe("package versions under central package management (#56)", function()
     assert.is_false(api["Newtonsoft.Json"].data.from_cpm)
   end)
 
+  it("shows a version written in the project as it is, unmarked", function()
+    local pinned = packages()["Api"]["Inline.Pinned"]
+    assert.are.equal("Inline.Pinned  1.2.3", pinned.label, "not the central 9.0.0")
+    assert.is_false(pinned.data.from_cpm)
+    assert.is_false(pinned.data.override)
+  end)
+
+  it("resolves one reference: override, then the project's version, then the central one", function()
+    local central = { serilog = "4.0.0" }
+    local function resolve(pkg)
+      return { cpm.resolve(pkg, central) }
+    end
+    assert.are.same({ "1.0.0", "override" }, resolve({ name = "Serilog", version = "2.0.0", override = "1.0.0" }))
+    assert.are.same({ "2.0.0" }, resolve({ name = "Serilog", version = "2.0.0", override = "" }))
+    assert.are.same({ "4.0.0", "central" }, resolve({ name = "SERILOG", version = "" }), "ids ignore case")
+    assert.are.same({}, resolve({ name = "Other", version = "" }))
+    assert.are.same({}, { cpm.resolve({ name = "Serilog" }, nil) }, "no central versions at all")
+  end)
+
   it("takes an empty VersionOverride as no override", function()
     assert.are.equal("Empty.Override  5.0.0  ⓒ", packages()["Api"]["Empty.Override"].label)
   end)

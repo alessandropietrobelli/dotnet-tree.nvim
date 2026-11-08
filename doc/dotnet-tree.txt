@@ -278,21 +278,31 @@ directory does not change.
 
                                                      *dotnet-tree-functions*
 An Azure Functions app is one whose project file sets <AzureFunctionsVersion>
-or whose folder has a host.json. It is started by the Functions host, so `r`
-needs Azure Functions Core Tools (`func`) on $PATH and says so when it is
-missing. What `r` runs depends on the SDK the project references, with its
-version read the way the Packages node shows it (VersionOverride, then the
-project, then Directory.Packages.props):
+or references Microsoft.NET.Sdk.Functions or
+Microsoft.Azure.Functions.Worker.Sdk, or whose folder has a host.json. It is
+started by the Functions host, so `r` needs Azure Functions Core Tools
+(`func`) on $PATH and says so when it is missing. What `r` runs depends on
+the SDK the project references, with its version read the way the Packages
+node shows it (VersionOverride, then the project, then
+Directory.Packages.props):
 
   Microsoft.Azure.Functions.Worker.Sdk 2.x   `dotnet run`, which starts
                                              `func start` itself
   Microsoft.Azure.Functions.Worker.Sdk 1.x   `func start`
   Microsoft.NET.Sdk.Functions (in-process)   `func start`
+  neither, or a version with no number       `dotnet run`
+  (a $(Property))
 
-When local.settings.json sets AzureWebJobsStorage to
-`UseDevelopmentStorage=true`, `r` checks that Azurite is listening on
-127.0.0.1:10000 and warns when it is not. The app is started anyway: the
-host runs without it, and reports its storage unhealthy.
+The major version is the first number written, so `1.*` and `[1.17,2.0)`
+count as 1.x. `w` → run does the same checks as `r`, and refuses an app that
+`r` starts with `func start`: `dotnet watch` cannot start its host.
+
+When AzureWebJobsStorage in local.settings.json contains
+`UseDevelopmentStorage=true`, `r` and `w` → run check that Azurite is
+listening on 127.0.0.1:10000 and warn when it is not. The warning is
+advisory and the app is started anyway: the host comes up, reports its
+storage unhealthy, and the triggers that need storage (timers, queues,
+blobs) fail.
 
 NUGET.NVIM                                            *dotnet-tree-nuget*
 
@@ -374,6 +384,9 @@ solutions are discoverable from the current working directory.
 It also reports whether debugging is available — nvim-dap installed and
 netcoredbg found — as a warning rather than an error: only `d` needs them.
 See |dotnet-tree-debug|.
+
+For each solution it also warns when the file cannot be read, or lists a
+project that is not on disk: `r`, `t` and `w` cannot run one.
 
 When a solution found there has an Azure Functions app, it reports whether
 `func` is on $PATH and, if an app uses `UseDevelopmentStorage=true`, whether

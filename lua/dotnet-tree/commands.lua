@@ -405,29 +405,40 @@ local function project_dir(path)
   return vim.fn.fnamemodify(path, ":h")
 end
 
--- The command `r` runs for the project at `path`, and the folder it runs in.
--- Nil when it cannot run: a function app with no `func` on PATH, which has
--- been reported.
-local function run_command(path)
-  local name = terminal.project_name(path)
-  local fn_app = require("dotnet-tree.functions").detect(path)
+local FUNC_INSTALL = "https://learn.microsoft.com/azure/azure-functions/functions-run-local"
+
+-- What starting the project at `path` with `r` (`watch` false) or `w` → run
+-- (`watch` true) needs when it is an Azure Functions app (#57): `func` on
+-- PATH, and Azurite when the app uses it, which is checked in the background
+-- and only warned about. `dotnet watch` cannot start the host of an app that
+-- `dotnet run` cannot start either, so `w` refuses those and points to `r`.
+-- Returns whether to go on, and the function app, nil for any other project.
+-- A refusal has been reported.
+local function prepare_function_app(path, watch)
+  local functions = require("dotnet-tree.functions")
+  local fn_app = functions.detect(path)
   if not fn_app then
-    return "dotnet run --project " .. vim.fn.shellescape(path)
+    return true, nil
   end
+  local name = terminal.project_name(path)
   if vim.fn.executable("func") == 0 then
     vim.notify(
-      "[dotnet-tree] "
-        .. name
-        .. " is an Azure Functions app and needs Azure Functions Core Tools (`func`) on PATH to run.",
+      ("[dotnet-tree] %s is an Azure Functions app and needs Azure Functions Core Tools (`func`) on PATH: %s"):format(
+        name,
+        FUNC_INSTALL
+      ),
       vim.log.levels.ERROR
     )
-    return nil
+    return false, fn_app
   end
-  require("dotnet-tree.functions").warn_without_azurite(fn_app.dir, name)
-  if fn_app.func then
-    return "func start"
+  if watch and fn_app.func then
+    local msg = "[dotnet-tree] dotnet watch cannot start %s: an in-process or Worker SDK 1.x function app "
+      .. "runs with `func start`. Press `r` instead."
+    vim.notify(msg:format(name), vim.log.levels.ERROR)
+    return false, fn_app
   end
-  return "dotnet run --project " .. vim.fn.shellescape(path)
+  functions.warn_without_azurite(fn_app.dir, name)
+  return true, fn_app
 end
 
 function M.run_project(state)
@@ -437,10 +448,12 @@ function M.run_project(state)
     return
   end
   local path = node.extra.project.path
-  local cmd = run_command(path)
-  if cmd then
-    terminal.open(cmd, "run " .. terminal.project_name(path), project_dir(path))
+  local go, fn_app = prepare_function_app(path, false)
+  if not go then
+    return
   end
+  local cmd = fn_app and fn_app.func and "func start" or "dotnet run --project " .. vim.fn.shellescape(path)
+  terminal.open(cmd, "run " .. terminal.project_name(path), project_dir(path))
 end
 
 function M.build_solution(state)
@@ -501,6 +514,9 @@ function M.watch(state)
       return
     end
     local path = node.extra.project.path
+    if choice == "run" and not prepare_function_app(path, true) then
+      return
+    end
     terminal.open(
       "dotnet watch " .. choice .. " --project " .. vim.fn.shellescape(path),
       "watch " .. choice .. " " .. terminal.project_name(path),

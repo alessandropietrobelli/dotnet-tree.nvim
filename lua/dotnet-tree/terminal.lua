@@ -51,25 +51,41 @@ end
 --- instead of the split it belongs to. Its label goes in the split's own
 --- winbar instead, and `:ls!` and the buffer name still find it.
 ---
---- `cwd` is the directory the command starts in; Neovim's own working
---- directory when nil. Only the command gets it: the split and the editor keep
---- theirs.
+--- `cwd` is the directory the command starts in; the current window's
+--- working directory when nil. Only the command gets it: the split and the
+--- editor keep theirs. A `cwd` that is not a directory -- a project listed in
+--- the solution but no longer on disk -- is reported, and nothing opens.
 ---@param cmd string run by the shell, as `:terminal` runs it
 ---@param label string what the terminal is running, e.g. "run Api"
 ---@param cwd string|nil
----@return integer bufnr
+---@return integer|nil bufnr nil when nothing was started
 function M.open(cmd, label, cwd)
-  vim.cmd("botright 15split")
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_win_set_buf(0, buf)
-  local opts = { cwd = cwd }
-  if vim.fn.has("nvim-0.11") == 1 then
-    opts.term = true
-    vim.fn.jobstart(cmd, opts)
-  else
-    vim.fn.termopen(cmd, opts)
+  if cwd and vim.fn.isdirectory(cwd) == 0 then
+    vim.notify(
+      ("[dotnet-tree] cannot %s: %s does not exist. Is the project still on disk?"):format(label, cwd),
+      vim.log.levels.ERROR
+    )
+    return nil
   end
+  vim.cmd("botright 15split")
   local win = vim.api.nvim_get_current_win()
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_win_set_buf(win, buf)
+  local ok, job = pcall(function()
+    if vim.fn.has("nvim-0.11") == 1 then
+      return vim.fn.jobstart(cmd, { term = true, cwd = cwd })
+    end
+    return vim.fn.termopen(cmd, { cwd = cwd })
+  end)
+  if not ok or job <= 0 then
+    pcall(vim.api.nvim_win_close, win, true)
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+    vim.notify(
+      ("[dotnet-tree] could not start `%s`: %s"):format(cmd, ok and ("job id " .. job) or job),
+      vim.log.levels.ERROR
+    )
+    return nil
+  end
   -- renaming never stops the command, so a failure here only costs the name
   pcall(vim.api.nvim_buf_set_name, buf, M.buffer_name(label))
   vim.bo[buf].buflisted = false
