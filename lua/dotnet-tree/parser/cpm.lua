@@ -3,12 +3,19 @@
 -- MSBuild looks for that file from each project's directory upward, so two
 -- projects of one solution can use two different files (#56). A nested file
 -- usually chains to the repository-root one with
--- `$([MSBuild]::GetPathOfFileAbove('Directory.Packages.props', ...))`, the
--- same form props.lua follows for Directory.Build.props, and then overrides a
+-- `$([MSBuild]::GetPathOfFileAbove(Directory.Packages.props, ...))`, the
+-- same form props.lua follows for Directory.Build.props, and then changes a
 -- version or two with `<PackageVersion Update="..." />`.
 --
+-- What NuGet then does with the PackageVersion items, checked against its
+-- restore graph: the first item for a package wins, in evaluation order, and a
+-- later Include of the same package is a duplicate it ignores (NU1506); an
+-- Update changes an item defined before it. Package ids are compared ignoring
+-- case, as NuGet does, so versions are keyed by the lowercased id.
+--
 -- It is not MSBuild evaluation: only that import is followed, and the file it
--- imports is taken to come first, which is where every chain puts it.
+-- imports is taken to come first, which is where the documented pattern puts
+-- it.
 local props = require("dotnet-tree.parser.props")
 local xml = require("dotnet-tree.parser.xml")
 
@@ -72,24 +79,24 @@ local function read(props_path)
   return cached
 end
 
--- Apply one file's entries to `versions`. An Include defines a version, the
--- first one in a file winning; an Update changes one defined before it, here or
--- in a file this one imports, and does nothing otherwise, as in MSBuild.
+-- Apply one file's entries to `versions`, in evaluation order. An Include
+-- defines a version unless one is already defined, here or in a file this one
+-- imports; an Update changes one defined before it and does nothing otherwise.
 local function apply(versions, entries)
-  local defined_here = {}
   for _, e in ipairs(entries) do
+    local id = e.name:lower()
     if e.update then
-      if versions[e.name] ~= nil then
-        versions[e.name] = e.version
+      if versions[id] ~= nil then
+        versions[id] = e.version
       end
-    elseif not defined_here[e.name] then
-      defined_here[e.name] = true
-      versions[e.name] = e.version
+    elseif versions[id] == nil then
+      versions[id] = e.version
     end
   end
 end
 
---- The versions one props file sets on its own, without the files it imports.
+--- The versions one props file sets on its own, without the files it imports,
+--- keyed by lowercased package id.
 ---@param props_path string
 ---@return table<string, string>
 function M.parse(props_path)
@@ -101,9 +108,10 @@ function M.parse(props_path)
   return versions
 end
 
---- The versions central package management gives a project in `dir`: from the
---- nearest Directory.Packages.props at or above it, and from the files it
---- chains to, the nearer file overriding. Nil when no file applies.
+--- The versions central package management gives a project in `dir`, keyed by
+--- lowercased package id: from the nearest Directory.Packages.props at or above
+--- it and the files it chains to, the imported file read first. Nil when no
+--- file applies.
 ---@param dir string the project's directory
 ---@return table<string, string>|nil
 function M.versions_for(dir)
@@ -129,7 +137,8 @@ function M.versions_for(dir)
     return nil
   end
   local versions = {}
-  -- The imported file first: the nearer one's entries come after it.
+  -- The imported file first: the nearer one's entries come after it, so its
+  -- Updates apply and its duplicate Includes do not.
   for i = #chain, 1, -1 do
     apply(versions, chain[i].entries)
   end

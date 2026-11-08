@@ -1,0 +1,7 @@
+<Project>
+  <!-- The same chain with the arguments quoted. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Packages.props', '$(MSBuildThisFileDirectory)../'))" />
+  <ItemGroup>
+    <PackageVersion Update="xunit" Version="2.5.0" />
+  </ItemGroup>
+</Project>

@@ -170,9 +170,10 @@ describe("parser.csproj", function()
     assert.are.same({ "net9.0" }, result.target_frameworks)
   end)
 
-  -- Microsoft's documentation writes the import without quotes (#56). Only the
-  -- quoted form used to be recognised, so this chain stopped at the nearest
-  -- file and the project had no framework.
+  -- The import written without quotes, as NuGet's documentation writes the
+  -- Directory.Packages.props one (#56). Only the quoted form used to be
+  -- recognised, so this chain stopped at the nearest file and the project had
+  -- no framework.
   it("follows the import written without quotes", function()
     local result = csproj.parse(FIXTURES .. "/props/chain/bare/Lib/Lib.csproj")
     assert.are.same({ "net9.0" }, result.target_frameworks)
@@ -362,10 +363,11 @@ describe("parser.cpm", function()
     cpm.invalidate()
   end)
 
+  -- Keyed by lowercased package id: NuGet matches ids ignoring case (#56).
   it("reads versions declared as attributes", function()
     local versions = cpm.parse(FIXTURES .. "/Directory.Packages.props")
-    assert.are.equal("9.9.9", versions["NoVersion.FromCpm"])
-    assert.are.equal("4.0.0", versions["Serilog"])
+    assert.are.equal("9.9.9", versions["noversion.fromcpm"])
+    assert.are.equal("4.0.0", versions["serilog"])
   end)
 
   -- Same regression as the csproj side. A commented-out PackageVersion used to
@@ -373,8 +375,8 @@ describe("parser.cpm", function()
   -- repository means the tree quotes a version that is not in force.
   it("ignores versions inside XML comments", function()
     local versions = cpm.parse(FIXTURES .. "/Directory.Packages.props")
-    assert.is_nil(versions["Commented.Cpm"])
-    assert.are.equal("4.0.0", versions["Serilog"])
+    assert.is_nil(versions["commented.cpm"])
+    assert.are.equal("4.0.0", versions["serilog"])
   end)
 
   -- Same regression as the csproj side (#10): the props reader used the same
@@ -382,7 +384,7 @@ describe("parser.cpm", function()
   -- was invisible and the tree showed no version for that package.
   it("reads a version whose Include sits behind a literal > in an attribute", function()
     local versions = cpm.parse(FIXTURES .. "/Directory.Packages.props")
-    assert.are.equal("5.5.5", versions["GtBefore.Cpm"])
+    assert.are.equal("5.5.5", versions["gtbefore.cpm"])
   end)
 
   -- Same form on the props side (#9). cpm.lua read it correctly only by
@@ -392,10 +394,10 @@ describe("parser.cpm", function()
   -- between and never seeing the tag that carries the child <Version>.
   it("reads versions declared as a <Version> child element", function()
     local versions = cpm.parse(FIXTURES .. "/Directory.Packages.props")
-    assert.are.equal("7.7.7", versions["Multi.Line.Cpm"])
+    assert.are.equal("7.7.7", versions["multi.line.cpm"])
     -- The self-closing entries above it are unaffected.
-    assert.are.equal("9.9.9", versions["NoVersion.FromCpm"])
-    assert.are.equal("4.0.0", versions["Serilog"])
+    assert.are.equal("9.9.9", versions["noversion.fromcpm"])
+    assert.are.equal("4.0.0", versions["serilog"])
   end)
 
   it("returns an empty table for a missing props file", function()
@@ -414,7 +416,9 @@ end)
 --
 -- tests/fixtures/cpm: a root props file; Api overrides two versions; Legacy has
 -- a props file that imports the root one and updates Serilog; Island has one
--- that imports nothing.
+-- that imports nothing; Quoted imports the root one with quoted arguments.
+-- Every expected version below is the one NuGet's restore graph gives
+-- (`dotnet msbuild -t:GenerateRestoreGraphFile`).
 describe("package versions under central package management (#56)", function()
   local CPM = FIXTURES .. "/cpm"
 
@@ -463,12 +467,51 @@ describe("package versions under central package management (#56)", function()
     assert.is_false(api["Newtonsoft.Json"].data.from_cpm)
   end)
 
+  it("takes an empty VersionOverride as no override", function()
+    assert.are.equal("Empty.Override  5.0.0  ⓒ", packages()["Api"]["Empty.Override"].label)
+  end)
+
+  it("keeps the first of two Includes for one package, in a file and across the chain", function()
+    local found = packages()
+    assert.are.equal("Dupe.InFile  1.0.0  ⓒ", found["Api"]["Dupe.InFile"].label)
+    assert.are.equal("Newtonsoft.Json  13.0.3  ⓒ", found["Legacy"]["Newtonsoft.Json"].label, "the root's, not 12.0.0")
+  end)
+
   it("uses the props file nearest to each project, and the one it imports", function()
     local legacy = packages()["Legacy"]
-    assert.are.equal("Serilog  3.1.1  ⓒ", legacy["Serilog"].label, "updated by the nested file")
+    assert.are.equal("Serilog  3.1.1  ⓒ", legacy["Serilog"].label, "updated by the nested file, as `serilog`")
     assert.are.equal("Newtonsoft.Json  13.0.3  ⓒ", legacy["Newtonsoft.Json"].label, "inherited from the root")
-    assert.are.equal("Legacy.Only  1.0.0  ⓒ", legacy["Legacy.Only"].label, "defined by the nested file")
+    assert.are.equal("legacy.only  1.0.0  ⓒ", legacy["legacy.only"].label, "referenced in another case")
     assert.are.equal("Never.Defined", legacy["Never.Defined"].label, "an Update defines nothing")
+  end)
+
+  it("follows the chain with the import's arguments quoted", function()
+    local quoted = packages()["Quoted"]
+    assert.are.equal("Serilog  4.0.0  ⓒ", quoted["Serilog"].label)
+    assert.are.equal("xunit  2.5.0  ⓒ", quoted["xunit"].label)
+  end)
+
+  -- A checkout or a pull changes the root file outside Neovim: nothing
+  -- invalidates the cache then, and the mtime check has to catch it for every
+  -- project that inherits from it.
+  it("reads the root file again when it changes on disk", function()
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    vim.fn.system({ "cp", "-R", CPM .. "/.", dir })
+    local root = dir .. "/Directory.Packages.props"
+    assert.are.equal("13.0.3", cpm.versions_for(dir .. "/Legacy")["newtonsoft.json"])
+
+    local lines = vim.fn.readfile(root)
+    for i, line in ipairs(lines) do
+      lines[i] = line:gsub('"13%.0%.3"', '"13.0.9"')
+    end
+    vim.fn.writefile(lines, root)
+    local later = os.time() + 5
+    vim.uv.fs_utime(root, later, later)
+
+    local versions = cpm.versions_for(dir .. "/Legacy")
+    assert.are.equal("13.0.9", versions["newtonsoft.json"])
+    assert.are.equal("3.1.1", versions["serilog"], "the nested file's Update still applies")
   end)
 
   it("stops at a nested props file that imports nothing, as MSBuild does", function()

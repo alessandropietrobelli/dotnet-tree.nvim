@@ -5,7 +5,7 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Serilog" />
-    <PackageReference Include="Legacy.Only" />
+    <PackageReference Include="legacy.only" />
     <PackageReference Include="Never.Defined" />
   </ItemGroup>
 </Project>

@@ -2,4 +2,5 @@
   <Project Path="Api/Api.csproj" />
   <Project Path="Legacy/Legacy.csproj" />
   <Project Path="Island/Island.csproj" />
+  <Project Path="Quoted/Quoted.csproj" />
 </Solution>
