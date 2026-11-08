@@ -30,6 +30,16 @@ mappings may land in a minor release; they will always be listed here.
   defined in both keeps the root's version, as NuGet does (NU1506). Package
   ids are matched ignoring case
   ([#56](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/56)).
+- `r` starts an Azure Functions app. It used to fail from the solution root
+  with `An error occurred trying to start process 'func'`: the Worker SDK 2.x
+  starts the Functions host from a folder relative to where `dotnet run` was
+  launched. `r`, `t` and `w` now start in the project's folder, for every
+  project; an in-process app or one on Worker SDK 1.x, which `dotnet run`
+  cannot start, runs with `func start`. `r` stops with a message when `func`
+  is not installed, and warns when the app uses
+  `UseDevelopmentStorage=true` and Azurite is not listening.
+  `:checkhealth dotnet-tree` reports both for a solution with a function app
+  ([#57](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/57)).
 - An `Import` of the file above written without quotes,
   `GetPathOfFileAbove(Directory.Build.props, ...)`, is followed like the
   quoted form; NuGet's documentation writes the `Directory.Packages.props` one

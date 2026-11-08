@@ -269,6 +269,31 @@ To debug a single test rather than the whole assembly, use neotest-dotnet:
 The `coreclr` adapter is registered with nvim-dap only if you have not
 configured one yourself: an adapter you set up wins.
 
+RUN, TEST AND WATCH                                     *dotnet-tree-run*
+
+`r`, `t` and `w` open a terminal split that starts in the project's folder,
+not in Neovim's working directory: the default ASP.NET Core host reads
+appsettings.json from the directory it starts in. Neovim's own working
+directory does not change.
+
+                                                     *dotnet-tree-functions*
+An Azure Functions app is one whose project file sets <AzureFunctionsVersion>
+or whose folder has a host.json. It is started by the Functions host, so `r`
+needs Azure Functions Core Tools (`func`) on $PATH and says so when it is
+missing. What `r` runs depends on the SDK the project references, with its
+version read the way the Packages node shows it (VersionOverride, then the
+project, then Directory.Packages.props):
+
+  Microsoft.Azure.Functions.Worker.Sdk 2.x   `dotnet run`, which starts
+                                             `func start` itself
+  Microsoft.Azure.Functions.Worker.Sdk 1.x   `func start`
+  Microsoft.NET.Sdk.Functions (in-process)   `func start`
+
+When local.settings.json sets AzureWebJobsStorage to
+`UseDevelopmentStorage=true`, `r` checks that Azurite is listening on
+127.0.0.1:10000 and warns when it is not. The app is started anyway: the
+host runs without it, and reports its storage unhealthy.
+
 NUGET.NVIM                                            *dotnet-tree-nuget*
 
 With nuget.nvim installed, `a` hands packages over to it instead of asking for
@@ -349,6 +374,10 @@ solutions are discoverable from the current working directory.
 It also reports whether debugging is available — nvim-dap installed and
 netcoredbg found — as a warning rather than an error: only `d` needs them.
 See |dotnet-tree-debug|.
+
+When a solution found there has an Azure Functions app, it reports whether
+`func` is on $PATH and, if an app uses `UseDevelopmentStorage=true`, whether
+Azurite is listening. See |dotnet-tree-functions|.
 
 ==============================================================================
 8. TROUBLESHOOTING                           *dotnet-tree-troubleshooting*

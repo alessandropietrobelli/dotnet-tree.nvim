@@ -50,13 +50,25 @@ end
 --- the files, and clicking it there opens the terminal in the editor window
 --- instead of the split it belongs to. Its label goes in the split's own
 --- winbar instead, and `:ls!` and the buffer name still find it.
----@param cmd string
+---
+--- `cwd` is the directory the command starts in; Neovim's own working
+--- directory when nil. Only the command gets it: the split and the editor keep
+--- theirs.
+---@param cmd string run by the shell, as `:terminal` runs it
 ---@param label string what the terminal is running, e.g. "run Api"
+---@param cwd string|nil
 ---@return integer bufnr
-function M.open(cmd, label)
+function M.open(cmd, label, cwd)
   vim.cmd("botright 15split")
-  vim.cmd("terminal " .. cmd)
-  local buf = vim.api.nvim_get_current_buf()
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_win_set_buf(0, buf)
+  local opts = { cwd = cwd }
+  if vim.fn.has("nvim-0.11") == 1 then
+    opts.term = true
+    vim.fn.jobstart(cmd, opts)
+  else
+    vim.fn.termopen(cmd, opts)
+  end
   local win = vim.api.nvim_get_current_win()
   -- renaming never stops the command, so a failure here only costs the name
   pcall(vim.api.nvim_buf_set_name, buf, M.buffer_name(label))

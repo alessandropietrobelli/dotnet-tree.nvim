@@ -398,6 +398,38 @@ function M.build(state)
   run_build("build", node.extra.project.path)
 end
 
+-- `r`, `t` and `w` start in the project's folder, not in Neovim's: a function
+-- app's host is found relative to it (#57), and the default host of an
+-- ASP.NET Core app reads appsettings.json from its working directory.
+local function project_dir(path)
+  return vim.fn.fnamemodify(path, ":h")
+end
+
+-- The command `r` runs for the project at `path`, and the folder it runs in.
+-- Nil when it cannot run: a function app with no `func` on PATH, which has
+-- been reported.
+local function run_command(path)
+  local name = terminal.project_name(path)
+  local fn_app = require("dotnet-tree.functions").detect(path)
+  if not fn_app then
+    return "dotnet run --project " .. vim.fn.shellescape(path)
+  end
+  if vim.fn.executable("func") == 0 then
+    vim.notify(
+      "[dotnet-tree] "
+        .. name
+        .. " is an Azure Functions app and needs Azure Functions Core Tools (`func`) on PATH to run.",
+      vim.log.levels.ERROR
+    )
+    return nil
+  end
+  require("dotnet-tree.functions").warn_without_azurite(fn_app.dir, name)
+  if fn_app.func then
+    return "func start"
+  end
+  return "dotnet run --project " .. vim.fn.shellescape(path)
+end
+
 function M.run_project(state)
   local node = find_project_node(state)
   if not node then
@@ -405,7 +437,10 @@ function M.run_project(state)
     return
   end
   local path = node.extra.project.path
-  terminal.open("dotnet run --project " .. vim.fn.shellescape(path), "run " .. terminal.project_name(path))
+  local cmd = run_command(path)
+  if cmd then
+    terminal.open(cmd, "run " .. terminal.project_name(path), project_dir(path))
+  end
 end
 
 function M.build_solution(state)
@@ -440,7 +475,7 @@ function M.test(state)
     return
   end
   local path = node.extra.project.path
-  terminal.open("dotnet test " .. vim.fn.shellescape(path), "test " .. terminal.project_name(path))
+  terminal.open("dotnet test " .. vim.fn.shellescape(path), "test " .. terminal.project_name(path), project_dir(path))
 end
 
 -- `d`: build the project under the cursor, then start netcoredbg on what it
@@ -468,7 +503,8 @@ function M.watch(state)
     local path = node.extra.project.path
     terminal.open(
       "dotnet watch " .. choice .. " --project " .. vim.fn.shellescape(path),
-      "watch " .. choice .. " " .. terminal.project_name(path)
+      "watch " .. choice .. " " .. terminal.project_name(path),
+      project_dir(path)
     )
   end)
 end
