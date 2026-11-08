@@ -254,11 +254,12 @@ function M.build(path, opts)
   end
 
   if opts.notify ~= false then
-    -- Built from the same pieces as `cmd`, so the message says what runs: `d`
-    -- passes `-c Debug`, and a line that leaves it out describes another build
-    -- (#40). Only the path is shortened, to the file name.
-    local shown = { "dotnet", action, vim.fn.fnamemodify(path, ":t") }
-    vim.list_extend(shown, opts.args or {})
+    -- A copy of `cmd` itself, so the message says what runs and cannot drift
+    -- from it: `d` pins the configuration with `-c`, and a line that leaves it
+    -- out describes another build (#40). Only the path is shortened, to the
+    -- file name.
+    local shown = vim.list_slice(cmd)
+    shown[3] = vim.fn.fnamemodify(path, ":t")
     vim.notify("[dotnet-tree] " .. table.concat(shown, " "))
   end
 
