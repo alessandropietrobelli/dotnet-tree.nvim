@@ -116,7 +116,12 @@ function M.setup(config, _)
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = group,
     callback = function(args)
-      local path = vim.fs.normalize(args.file)
+      -- `args.file` is the name as typed (`src/New.cs`); the caches and the
+      -- tree's index are keyed by absolute path.
+      local path = vim.fs.normalize(vim.api.nvim_buf_get_name(args.buf))
+      if path == "" then
+        return
+      end
       if path:match("%.slnx?$") then
         require("dotnet-tree.parser.solution").invalidate(path)
         require("dotnet-tree.parser.csproj").invalidate()
@@ -130,6 +135,23 @@ function M.setup(config, _)
         return
       end
       refresh.rebuild()
+    end,
+  })
+
+  -- A commit, a checkout or a stash done outside Neovim changes the markers
+  -- without any write here: back from another terminal, or out of a terminal
+  -- buffer such as lazygit, ask git again (#61). Fugitive says so itself.
+  vim.api.nvim_create_autocmd({ "FocusGained", "TermClose" }, {
+    group = group,
+    callback = function()
+      refresh.on_outside_change()
+    end,
+  })
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "FugitiveChanged",
+    callback = function()
+      refresh.on_outside_change()
     end,
   })
 

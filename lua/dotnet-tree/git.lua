@@ -10,8 +10,9 @@ local M = {}
 -- Solution directory -> { map = path -> two-letter code }, the status a
 -- rebuild paints.
 local known = {}
--- Solution directory -> repository top level, or false outside a repository.
--- It does not change while the solution is open, so it is asked once.
+-- Solution directory -> repository top level, or false when git said it is
+-- not a repository. It does not change while the solution is open, so it is
+-- asked once; a git that failed for another reason is asked again.
 local toplevels = {}
 -- Solution directory -> the fetch in flight: { on_change, again }.
 local running = {}
@@ -39,12 +40,53 @@ function M.parse(lines, toplevel)
   return map
 end
 
--- Run `cmd` as a job and hand its output lines to `done`, or nil when it
--- failed or could not start.
+-- Milliseconds a git command may take before it is stopped. A git that never
+-- answers (a stuck fsmonitor, a stalled network drive) would otherwise keep
+-- its fetch in flight forever, and every later fetch would wait on it.
+M.timeout_ms = 30000
+
+-- Warnings already shown, by key: git failing is reported once per session,
+-- not on every save.
+local warned = {}
+
+-- Quitting stops the jobs still running, and they end as failures: that is
+-- not something to report on the way out. A function so tests can stand in
+-- for `v:exiting`, which is read-only.
+function M.exiting()
+  return vim.v.exiting ~= vim.NIL
+end
+
+local function warn_once(key, msg)
+  if M.exiting() then
+    return
+  end
+  pcall(function()
+    require("neo-tree.log").debug("[dotnet-tree] ", msg)
+  end)
+  if warned[key] then
+    return
+  end
+  warned[key] = true
+  vim.notify("[dotnet-tree] " .. msg, vim.log.levels.WARN)
+end
+M.warn_once = warn_once
+
+-- Run `cmd` as a job. `done(lines, code, stderr)` gets the output lines, or nil
+-- when the command failed, could not start or timed out; it is called once.
 local function run(cmd, done)
-  local lines = {}
+  local lines, errors, finished = {}, {}, false
+  local function once(output, code, stderr)
+    if finished then
+      return
+    end
+    finished = true
+    vim.schedule(function()
+      done(output, code, stderr)
+    end)
+  end
   local ok, job = pcall(vim.fn.jobstart, cmd, {
     stdout_buffered = true,
+    stderr_buffered = true,
     on_stdout = function(_, data)
       for _, line in ipairs(data or {}) do
         line = line:gsub("\r$", "")
@@ -53,24 +95,37 @@ local function run(cmd, done)
         end
       end
     end,
+    on_stderr = function(_, data)
+      for _, line in ipairs(data or {}) do
+        if line ~= "" then
+          table.insert(errors, line)
+        end
+      end
+    end,
     on_exit = function(_, code)
-      vim.schedule(function()
-        done(code == 0 and lines or nil)
-      end)
+      once(code == 0 and lines or nil, code, table.concat(errors, "\n"))
     end,
   })
   if not ok or job <= 0 then
-    vim.schedule(function()
-      done(nil)
-    end)
+    local reason = not ok and tostring(job) or (job == -1 and "git is not executable" or "invalid arguments")
+    once(nil, -1, reason)
+    return
   end
+  vim.defer_fn(function()
+    if not finished then
+      pcall(vim.fn.jobstop, job)
+      once(nil, -1, ("no answer after %d s"):format(M.timeout_ms / 1000))
+    end
+  end, M.timeout_ms)
 end
 
 --- Ask git for the status of the repository holding `root`, in the background.
 --- `on_change` is called once the answer is in, and only when it differs from
 --- the status a rebuild would paint now. A fetch asked for while one is
 --- running is not lost: the running one is asked again when it ends, since
---- its answer may predate what triggered the second request.
+--- its answer may predate what triggered the second request. When git fails,
+--- the status painted is kept and the failure is reported once: a failed
+--- `git status` is not a clean repository.
 ---@param root string the solution directory
 ---@param on_change fun()?
 function M.fetch(root, on_change)
@@ -84,10 +139,14 @@ function M.fetch(root, on_change)
   current = { on_change = on_change }
   running[root] = current
 
+  -- `map` nil means "unknown": keep what is painted.
   local function finish(map)
     running[root] = nil
     if current.again then
       M.fetch(root, current.on_change)
+      return
+    end
+    if not map then
       return
     end
     local before = known[root] and known[root].map or {}
@@ -97,10 +156,31 @@ function M.fetch(root, on_change)
     end
   end
 
+  -- Whatever goes wrong in a callback, the fetch must end: a fetch left in
+  -- flight would turn every later one into a no-op.
+  local function guarded(fn)
+    return function(...)
+      local ok, err = pcall(fn, ...)
+      if not ok then
+        running[root] = nil
+        warn_once("git-error", "reading git status failed: " .. tostring(err))
+      end
+    end
+  end
+
   local function status(toplevel)
-    run({ "git", "-C", root, "status", "--porcelain=v1", "-uall", "--ignored=no" }, function(lines)
-      finish(lines and M.parse(lines, toplevel) or {})
-    end)
+    local cmd = { "git", "-C", root, "status", "--porcelain=v1", "-uall", "--ignored=no" }
+    run(
+      cmd,
+      guarded(function(lines, _, stderr)
+        if not lines then
+          warn_once("git-status", "git status failed, markers may be out of date: " .. stderr)
+          finish(nil)
+          return
+        end
+        finish(M.parse(lines, toplevel))
+      end)
+    )
   end
 
   if toplevels[root] == false then
@@ -110,17 +190,25 @@ function M.fetch(root, on_change)
     status(toplevels[root])
     return
   end
-  run({ "git", "-C", root, "rev-parse", "--show-toplevel" }, function(lines)
-    local toplevel = lines and lines[1]
-    if not toplevel or toplevel == "" then
-      -- Not a repository: nothing to paint, and nothing to ask next time.
-      toplevels[root] = false
-      finish({})
-      return
-    end
-    toplevels[root] = vim.fs.normalize(toplevel)
-    status(toplevels[root])
-  end)
+  run(
+    { "git", "-C", root, "rev-parse", "--show-toplevel" },
+    guarded(function(lines, code, stderr)
+      local toplevel = lines and lines[1]
+      if toplevel and toplevel ~= "" then
+        toplevels[root] = vim.fs.normalize(toplevel)
+        status(toplevels[root])
+      elseif code == 128 and stderr:find("not a git repository", 1, true) then
+        -- Git ran and said so: nothing to paint, and nothing to ask next time.
+        toplevels[root] = false
+        finish({})
+      else
+        -- Git missing, refusing the directory (safe.directory) or failing
+        -- otherwise: ask again next time, it may be fixed by then.
+        warn_once("git-rev-parse", "git status unavailable, no git markers: " .. stderr)
+        finish(nil)
+      end
+    end)
+  )
 end
 
 --- Whether a fetch for `root` is in flight, for tests.
@@ -130,9 +218,9 @@ function M._running(root)
   return running[vim.fs.normalize(root)] ~= nil
 end
 
---- Forget every status and top level, for tests.
+--- Forget every status, top level and warning, for tests.
 function M.reset()
-  known, toplevels, running = {}, {}, {}
+  known, toplevels, running, warned = {}, {}, {}, {}
 end
 
 local function dir_status(child_codes)

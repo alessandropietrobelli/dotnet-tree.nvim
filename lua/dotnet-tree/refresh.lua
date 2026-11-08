@@ -9,6 +9,8 @@
 --   was written              when the status changed
 --   a new file was written   rebuild, so it shows up
 --   under a project
+--   focus back, a terminal   ask git again in the background: a commit or a
+--   closed (lazygit)         checkout done outside may have changed it (#61)
 --
 -- neo-tree is required lazily, so this module can be tested without it.
 local M = {}
@@ -19,16 +21,31 @@ local SOURCE = "dotnet-tree"
 -- nothing on screen.
 local IGNORED_DIRS = { bin = true, obj = true, [".vs"] = true, [".git"] = true, node_modules = true }
 
+-- neo-tree's manager, or nil before neo-tree is loaded: then there is no tree
+-- to update and nothing to report.
 local function manager()
-  return require("neo-tree.sources.manager")
+  local ok, mgr = pcall(require, "neo-tree.sources.manager")
+  return ok and mgr or nil
+end
+
+-- Run `fn`, reporting a failure once instead of on every keystroke or save.
+local function guarded(what, fn)
+  local ok, err = pcall(fn)
+  if not ok then
+    require("dotnet-tree.git").warn_once("refresh-" .. what, what .. " failed: " .. tostring(err))
+  end
 end
 
 --- Walk and parse again, keeping the focus where it was: neo-tree's refresh
 --- may move it into the tree window.
 function M.rebuild()
+  local mgr = manager()
+  if not mgr then
+    return
+  end
   local prev_win = vim.api.nvim_get_current_win()
-  pcall(function()
-    manager().refresh(SOURCE)
+  guarded("rebuilding the tree", function()
+    mgr.refresh(SOURCE)
   end)
   if vim.api.nvim_win_is_valid(prev_win) then
     pcall(vim.api.nvim_set_current_win, prev_win)
@@ -37,8 +54,25 @@ end
 
 --- Render the nodes the tree already has, so components read their data again.
 function M.redraw()
-  pcall(function()
-    manager().redraw(SOURCE)
+  local mgr = manager()
+  if not mgr then
+    return
+  end
+  guarded("redrawing the tree", function()
+    mgr.redraw(SOURCE)
+  end)
+end
+
+-- One rebuild for all the writes of a `:wa`, after they are done.
+local rebuild_scheduled = false
+local function schedule_rebuild()
+  if rebuild_scheduled then
+    return
+  end
+  rebuild_scheduled = true
+  vim.schedule(function()
+    rebuild_scheduled = false
+    M.rebuild()
   end)
 end
 
@@ -87,16 +121,20 @@ local function would_list(index, path)
 end
 
 --- What writing `path` does to the tree of each open dotnet-tree.
----@param path string
+---@param path string absolute
 function M.on_write(path)
   if not path or path == "" then
+    return
+  end
+  local mgr = manager()
+  if not mgr then
     return
   end
   path = vim.fs.normalize(path)
   local reveal = require("dotnet-tree.reveal")
   local rebuild, fetch = false, {}
-  pcall(function()
-    manager()._for_each_state(SOURCE, function(state)
+  guarded("updating the tree after a write", function()
+    mgr._for_each_state(SOURCE, function(state)
       local index = state.dotnet_index
       if not index or not state.dotnet_sln then
         return
@@ -110,10 +148,31 @@ function M.on_write(path)
   end)
   if rebuild then
     -- The rebuild asks git itself.
-    M.rebuild()
+    schedule_rebuild()
     return
   end
   for sln_dir in pairs(fetch) do
+    M.git(sln_dir)
+  end
+end
+
+--- Ask git again for every open tree's solution, rebuilding only the ones
+--- whose status changed: the repository may have changed outside Neovim (a
+--- commit in another terminal, lazygit in a float).
+function M.on_outside_change()
+  local mgr = manager()
+  if not mgr then
+    return
+  end
+  local roots = {}
+  guarded("checking git status", function()
+    mgr._for_each_state(SOURCE, function(state)
+      if state.dotnet_sln and state.dotnet_index then
+        roots[vim.fs.dirname(vim.fs.normalize(state.dotnet_sln))] = true
+      end
+    end)
+  end)
+  for sln_dir in pairs(roots) do
     M.git(sln_dir)
   end
 end

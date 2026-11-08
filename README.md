@@ -55,7 +55,8 @@ This source renders that graph.
   you open or close yourself are left alone
 - **Auto refresh** without stalling the editor: diagnostics redraw the tree, writing a
   project, solution or `Directory.Packages.props` rebuilds it, writing a new file in a project
-  adds it, and git status is read in the background
+  adds it, and git status is read in the background, also after a commit or checkout done
+  outside Neovim
 - **Works with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim)** when it is
   installed: `a` on a project's Packages opens its window to search and install, with that
   project picked; `a` on a package opens it on that package — versions per project, updates,

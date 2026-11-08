@@ -82,9 +82,15 @@ persisted per working directory in: >
 The tree is rebuilt after writing `*.csproj`, `*.fsproj`, `*.vbproj`,
 `*.sln`, `*.slnx` or `Directory.Packages.props`, and after writing a new
 file inside a project. |DiagnosticChanged| only redraws it: the counts are
-read again without rescanning the solution. Git status is read in the
-background and shows up when git answers. Files created outside Neovim
-appear on `R`.
+read again without rescanning the solution.
+
+Git status is read in the background, after every rebuild, after writing a
+file the tree shows, on |FocusGained|, on |TermClose| (lazygit and other
+terminal clients) and after fugitive changes the repository. The tree is
+rebuilt only when the status changed. If git fails, the markers already
+shown stay and the error is reported once.
+
+Files created, deleted or renamed outside Neovim appear on `R`.
 
                                                      *dotnet-tree-reveal*
 `reveal` puts the cursor on the current file: the tree expands the solution,
