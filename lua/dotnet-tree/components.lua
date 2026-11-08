@@ -207,8 +207,8 @@ local function get_diag_index()
 end
 
 -- Errors/warnings under a project directory. Memoised per directory for the
--- lifetime of the index, so a project row costs one scan per refresh, not one
--- per redraw.
+-- lifetime of the index, so a project row costs one scan per diagnostics
+-- change, shared by every redraw until the next one.
 local function counts_under_dir(idx, dir)
   local cached = idx.by_dir[dir]
   if cached then

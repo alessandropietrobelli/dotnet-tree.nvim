@@ -15,6 +15,27 @@ mappings may land in a minor release; they will always be listed here.
   now shows `dotnet build Foo.csproj -c Debug`, the build it actually starts,
   instead of leaving out `-c Debug`
   ([#40](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/40)).
+- The editor no longer stalls while you type on a large solution. A diagnostics
+  change used to rebuild the whole tree, rescanning every project and waiting
+  for `git status`; it now only redraws it (on jellyfin, 57 ms down to under
+  1 ms). Git status is read in the background, so a full rebuild no longer
+  waits for it either. When git fails, the markers already shown are kept and
+  the error is reported once, instead of the tree turning clean
+  ([#49](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/49)).
+
+### Changed
+
+- Git markers follow what happens outside Neovim: a commit, a checkout or a
+  stash in another terminal, in lazygit or through fugitive. Git is asked again
+  when Neovim gets the focus back, when a terminal buffer closes and after
+  fugitive changes the repository, and the tree is rebuilt only when the
+  status changed
+  ([#61](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/61)).
+- Files created, deleted or renamed outside Neovim show up on `R`, not at the
+  next diagnostics change: that was a side effect of the rebuild removed in
+  [#49](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/49),
+  until [#52](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/52).
+  Writing a new file inside a project from Neovim still adds it to the tree.
 
 ## [0.3.1] - 2026-11-07
 

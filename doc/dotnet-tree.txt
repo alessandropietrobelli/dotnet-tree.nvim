@@ -79,9 +79,18 @@ repository contains more than one, press `s` to choose; the choice is
 persisted per working directory in: >
     stdpath("state")/dotnet-tree/solutions.json
 <
-The tree refreshes automatically on |DiagnosticChanged| and after writing
-`*.csproj`, `*.fsproj`, `*.vbproj`, `*.sln`, `*.slnx` or
-`Directory.Packages.props`.
+The tree is rebuilt after writing `*.csproj`, `*.fsproj`, `*.vbproj`,
+`*.sln`, `*.slnx` or `Directory.Packages.props`, and after writing a new
+file inside a project. |DiagnosticChanged| only redraws it: the counts are
+read again without rescanning the solution.
+
+Git status is read in the background, after every rebuild, after writing a
+file the tree shows, on |FocusGained|, on |TermClose| (lazygit and other
+terminal clients) and after fugitive changes the repository. The tree is
+rebuilt only when the status changed. If git fails, the markers already
+shown stay and the error is reported once.
+
+Files created, deleted or renamed outside Neovim appear on `R`.
 
                                                      *dotnet-tree-reveal*
 `reveal` puts the cursor on the current file: the tree expands the solution,
@@ -117,8 +126,8 @@ The question comes from neo-tree, and the answer does not move this tree,
 which always shows the solution; answer no.
 
 The tree finds the file by what it last rendered, so a file created since
-then is followed after the next refresh (`R`, saving a project file, or the
-automatic one on |DiagnosticChanged|).
+then is followed after the next refresh (`R`, or saving the file or a
+project file from Neovim).
 
                                                         *dotnet-tree-quickfix*
 BUILD OUTPUT

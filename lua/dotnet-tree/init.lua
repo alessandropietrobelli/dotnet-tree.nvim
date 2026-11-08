@@ -80,16 +80,6 @@ local function find_default_sln(cwd)
   return require("dotnet-tree.parser.solution").find(cwd)[1]
 end
 
-local function refresh_preserve_focus()
-  local prev_win = vim.api.nvim_get_current_win()
-  pcall(function()
-    require("neo-tree.sources.manager").refresh("dotnet-tree")
-  end)
-  if vim.api.nvim_win_is_valid(prev_win) then
-    pcall(vim.api.nvim_set_current_win, prev_win)
-  end
-end
-
 function M.setup(config, _)
   local group = vim.api.nvim_create_augroup("DotnetTreeAutoRefresh", { clear = true })
 
@@ -103,6 +93,11 @@ function M.setup(config, _)
     })
   end
 
+  local refresh = require("dotnet-tree.refresh")
+
+  -- Roslyn publishes diagnostics all the time while you type. The counts are
+  -- read from their own index (components.lua), so a redraw shows them; a
+  -- rebuild here used to rescan the solution and block on git each time (#49).
   local diag_pending = false
   vim.api.nvim_create_autocmd("DiagnosticChanged", {
     group = group,
@@ -113,30 +108,55 @@ function M.setup(config, _)
       diag_pending = true
       vim.defer_fn(function()
         diag_pending = false
-        refresh_preserve_focus()
-      end, 800)
+        refresh.redraw()
+      end, 200)
     end,
   })
 
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = group,
-    pattern = { "*.csproj", "*.fsproj", "*.vbproj", "*.sln", "*.slnx", "Directory.Packages.props" },
     callback = function(args)
-      local path = vim.fs.normalize(args.file)
+      -- `args.file` is the name as typed (`src/New.cs`); the caches and the
+      -- tree's index are keyed by absolute path.
+      local path = vim.fs.normalize(vim.api.nvim_buf_get_name(args.buf))
+      if path == "" then
+        return
+      end
       if path:match("%.slnx?$") then
         require("dotnet-tree.parser.solution").invalidate(path)
         require("dotnet-tree.parser.csproj").invalidate()
       elseif path:match("Directory%.Packages%.props$") then
         require("dotnet-tree.parser.cpm").invalidate(path)
-      else
+      elseif path:match("%.[cfv][sb]?proj$") then
         require("dotnet-tree.parser.csproj").invalidate(path)
+      else
+        -- Any other file: its git marker, or a new node when it is new.
+        refresh.on_write(path)
+        return
       end
-      refresh_preserve_focus()
+      refresh.rebuild()
+    end,
+  })
+
+  -- A commit, a checkout or a stash done outside Neovim changes the markers
+  -- without any write here: back from another terminal, or out of a terminal
+  -- buffer such as lazygit, ask git again (#61). Fugitive says so itself.
+  vim.api.nvim_create_autocmd({ "FocusGained", "TermClose" }, {
+    group = group,
+    callback = function()
+      refresh.on_outside_change()
+    end,
+  })
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "FugitiveChanged",
+    callback = function()
+      refresh.on_outside_change()
     end,
   })
 
   -- nuget.nvim changes projects with dotnet, outside any buffer: BufWritePost never sees it
-  require("dotnet-tree.nuget").watch(group, refresh_preserve_focus)
+  require("dotnet-tree.nuget").watch(group, refresh.rebuild)
 end
 
 function M.navigate(state, path, path_to_reveal, callback, async)
@@ -175,6 +195,8 @@ function M.navigate(state, path, path_to_reveal, callback, async)
   local reveal = require("dotnet-tree.reveal")
   state.dotnet_index = reveal.index(items)
   renderer.show_nodes(items, state)
+  -- The build painted the git status known before it; ask for the current one.
+  require("dotnet-tree.refresh").git(vim.fs.dirname(vim.fs.normalize(state.dotnet_sln)))
 
   -- node ids are not paths here, so `:Neotree reveal` goes through the index.
   -- A file no node shows is not an error: with follow_current_file every
