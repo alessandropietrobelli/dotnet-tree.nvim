@@ -519,7 +519,7 @@ local function line_bounds(content, pos)
 end
 
 -- Whether `rel`, as the solution file writes it, names `path`
-local function names(sln_dir, rel, path)
+local function writes_path(sln_dir, rel, path)
   return vim.fs.normalize(sln_dir .. "/" .. rel:gsub("\\", "/")) == vim.fs.normalize(path)
 end
 
@@ -545,7 +545,7 @@ local function sln_find_item(content, folder, sln_dir, path)
     end
     local line = content:sub(ls, le - 1):gsub("\n$", "")
     local rel = line:match("^%s*(.-)%s*=")
-    if rel and rel ~= "" and names(sln_dir, rel, path) then
+    if rel and rel ~= "" and writes_path(sln_dir, rel, path) then
       return ls, le, line
     end
     pos = le - 1
@@ -565,7 +565,7 @@ local function slnx_find_item(content, folder, sln_dir, path)
       return nil
     end
     local rel = xml.attr_ci(xml.parse_attrs(attrs), "Path")
-    if rel and names(sln_dir, rel, path) then
+    if rel and writes_path(sln_dir, rel, path) then
       return ts, te
     end
     pos = te + 1

@@ -838,7 +838,6 @@ end
 local function reveal_after(state, path)
   local ok, err = pcall(function()
     require("neo-tree.sources.manager").navigate(state, state.path, nil, function()
-      local reveal = require("dotnet-tree.reveal")
       local id = path and state.dotnet_index and reveal.lookup(state.dotnet_index, path)
       if id then
         pcall(reveal.focus, state, id)
