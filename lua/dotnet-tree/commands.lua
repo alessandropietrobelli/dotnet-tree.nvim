@@ -266,6 +266,10 @@ local function warn(message)
   vim.notify("[dotnet-tree] " .. message, vim.log.levels.WARN)
 end
 
+local function info(message)
+  vim.notify("[dotnet-tree] " .. message, vim.log.levels.INFO)
+end
+
 -- The solution as it is on disk now, and the folder `guid` in it
 local function load_solution(state, guid)
   if not state.dotnet_sln then
@@ -276,7 +280,7 @@ local function load_solution(state, guid)
   solution.invalidate(state.dotnet_sln)
   local sln, err = solution.parse(state.dotnet_sln)
   if not sln then
-    warn(tostring(err))
+    warn("could not read the solution: " .. tostring(err))
     return nil
   end
   local folder = guid and sln.by_guid[guid]
@@ -298,14 +302,19 @@ local function folder_names(sln, folder)
   return names
 end
 
--- Build the tree again from the file, then put the cursor on node `id`
+-- Build the tree again from the file and, when the node `id` is found, put the
+-- cursor on it. A failure is reported, never swallowed.
 local function show(state, id)
-  local ok = pcall(function()
+  local ok, err = pcall(function()
     require("neo-tree.sources.manager").navigate(state, state.path, nil, function()
-      pcall(require("dotnet-tree.reveal").focus, state, id)
+      local focused, focus_err = pcall(require("dotnet-tree.reveal").focus, state, id)
+      if not focused then
+        warn("could not put the cursor on the new node: " .. tostring(focus_err))
+      end
     end)
   end)
   if not ok then
+    warn("could not redraw the tree, rebuilding it: " .. tostring(err))
     require("dotnet-tree.refresh").rebuild()
   end
 end
@@ -318,7 +327,7 @@ end
 local function new_solution_folder(state, sln, parent)
   local where = parent and parent.name or vim.fn.fnamemodify(state.dotnet_sln, ":t")
   vim.ui.input({ prompt = ("New solution folder in %s: "):format(where) }, function(name)
-    if not name or vim.trim(name) == "" then
+    if not name then
       return
     end
     local ok, err, id =
@@ -327,11 +336,14 @@ local function new_solution_folder(state, sln, parent)
       warn(err)
       return
     end
+    info(("created solution folder %s in %s"):format(vim.trim(name), where))
     show(state, folder_id(state.dotnet_sln, id))
   end)
 end
 
--- Ask for a path, starting in the folder's directory on disk, with completion
+-- Ask for a path, starting in the folder's directory on disk, with completion.
+-- `cb` gets the absolute path, and whether the answer named a directory (it
+-- ended in a slash, which normalizing would drop).
 local function ask_path(prompt, sln, folder, cb)
   local dir = require("dotnet-tree.solution_edit").directory(sln, folder)
   local default = vim.fn.fnamemodify(dir, ":~:.")
@@ -339,45 +351,108 @@ local function ask_path(prompt, sln, folder, cb)
     default = default .. "/"
   end
   vim.ui.input({ prompt = prompt, default = default, completion = "file" }, function(input)
-    if not input or vim.trim(input) == "" then
+    if not input then
       return
     end
-    cb(vim.fs.normalize(vim.fn.fnamemodify(vim.fn.expand(vim.trim(input)), ":p")))
+    input = vim.trim(input)
+    if input == "" then
+      warn("no path given")
+      return
+    end
+    local is_dir = input:sub(-1) == "/" or input:sub(-1) == "\\"
+    cb(vim.fs.normalize(vim.fn.fnamemodify(vim.fn.expand(input), ":p")), is_dir)
   end)
 end
 
 local function add_to_folder(state, folder, path)
-  local ok, err = require("dotnet-tree.solution_edit").add_file(state.dotnet_sln, folder, path)
+  local edit = require("dotnet-tree.solution_edit")
+  local ok, err = edit.add_file(state.dotnet_sln, folder, path)
   if not ok then
     warn(err)
     return false
   end
-  show(state, "dotnet:slnitem:" .. folder.guid .. ":" .. path)
+  info(("added %s to %s"):format(vim.fn.fnamemodify(path, ":~:."), folder.name))
+  -- The node id is built from the path as the parser reads it back
+  local sln, fresh = load_solution(state, folder.guid)
+  local item = sln and edit.item_path(fresh, path) or path
+  show(state, "dotnet:slnitem:" .. folder.guid .. ":" .. item)
   return true
 end
 
+-- The directories `mkdir -p` would create for `dir`, outermost first
+local function missing_dirs(dir)
+  local missing = {}
+  while dir ~= "" and vim.fn.isdirectory(dir) == 0 do
+    table.insert(missing, 1, dir)
+    local parent = vim.fn.fnamemodify(dir, ":h")
+    if parent == dir then
+      break
+    end
+    dir = parent
+  end
+  return missing
+end
+
+-- Remove the file and the directories created for it, innermost first
+local function undo_create(path, created)
+  local removed, err = os.remove(path)
+  if not removed then
+    warn(("could not remove %s after the failed add: %s"):format(vim.fn.fnamemodify(path, ":~:."), err))
+    return
+  end
+  for i = #created, 1, -1 do
+    vim.uv.fs_rmdir(created[i])
+  end
+end
+
+-- In an editor window, as `<cr>` opens a file, never in the tree's
+local function open_in_editor(state, path)
+  local ok, err = pcall(require("neo-tree.utils").open_file, state, path)
+  if ok then
+    return
+  end
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if vim.bo[buf].filetype ~= "neo-tree" and vim.api.nvim_win_get_config(win).relative == "" then
+      vim.api.nvim_set_current_win(win)
+      local edited, edit_err = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(path))
+      if not edited then
+        warn(("could not open %s: %s"):format(vim.fn.fnamemodify(path, ":~:."), edit_err))
+      end
+      return
+    end
+  end
+  warn(("could not open %s: %s"):format(vim.fn.fnamemodify(path, ":~:."), err))
+end
+
 local function new_solution_item(state, sln, folder)
-  ask_path(("New file in %s: "):format(folder.name), sln, folder, function(path)
-    if path:sub(-1) == "/" or vim.fn.isdirectory(path) == 1 then
-      warn("give the file a name")
+  ask_path(("New file in %s: "):format(folder.name), sln, folder, function(path, is_dir)
+    if is_dir or vim.fn.isdirectory(path) == 1 then
+      warn("give the file a name, after the directory")
       return
     end
     if vim.uv.fs_stat(path) then
       warn(("%s already exists: press `a` to add it to %s"):format(vim.fn.fnamemodify(path, ":~:."), folder.name))
       return
     end
-    vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
-    vim.fn.writefile({}, path)
-    if not add_to_folder(state, folder, path) then
-      -- Not in the solution: do not leave a stray empty file behind
-      os.remove(path)
+    local created = missing_dirs(vim.fn.fnamemodify(path, ":h"))
+    local made, err = pcall(function()
+      vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+      vim.fn.writefile({}, path)
+    end)
+    if not made then
+      warn(("could not create %s: %s"):format(vim.fn.fnamemodify(path, ":~:."), err))
+      for i = #created, 1, -1 do
+        vim.uv.fs_rmdir(created[i])
+      end
       return
     end
-    -- In an editor window, as `<cr>` opens a file, not in the tree's
-    local opened = pcall(require("neo-tree.utils").open_file, state, path)
-    if not opened then
-      vim.cmd("edit " .. vim.fn.fnameescape(path))
+    if not add_to_folder(state, folder, path) then
+      -- Not in the solution: leave nothing behind
+      undo_create(path, created)
+      return
     end
+    open_in_editor(state, path)
   end)
 end
 
@@ -407,6 +482,10 @@ local function solution_add(state, target)
     return
   end
   ask_path(("Add file to %s: "):format(folder.name), sln, folder, function(path)
+    if vim.fn.isdirectory(path) == 1 then
+      warn(("%s is a directory: name a file in it"):format(vim.fn.fnamemodify(path, ":~:.")))
+      return
+    end
     if vim.fn.filereadable(path) == 0 then
       warn(("no file at %s"):format(vim.fn.fnamemodify(path, ":~:.")))
       return

@@ -246,6 +246,209 @@ describe("solution_edit on .slnx", function()
   end)
 end)
 
+describe("solution_edit on solution files written by hand", function()
+  -- Folders "a", "b" and "c" each listing a file; "c" nested in "b"; GUIDs in
+  -- lowercase; no line break after EndGlobal
+  local function three_folders()
+    return table.concat({
+      ('Project("{%s}") = "a", "a", "{aaaaaaaa-0000-4000-8000-000000000001}"'):format(FOLDER:lower()),
+      "\tProjectSection(SolutionItems) = preProject",
+      "\t\ta.txt = a.txt",
+      "\tEndProjectSection",
+      "EndProject",
+      ('Project("{%s}") = "b", "b", "{bbbbbbbb-0000-4000-8000-000000000002}"'):format(FOLDER:lower()),
+      "\tProjectSection(SolutionItems) = preProject",
+      "\t\tb.txt = b.txt",
+      "\tEndProjectSection",
+      "EndProject",
+      ('Project("{%s}") = "c", "c", "{cccccccc-0000-4000-8000-000000000003}"'):format(FOLDER:lower()),
+      "\tProjectSection(SolutionItems) = preProject",
+      "\t\tc.txt = c.txt",
+      "\tEndProjectSection",
+      "EndProject",
+      "Global",
+      "\tGlobalSection(NestedProjects) = preSolution",
+      "\t\t{cccccccc-0000-4000-8000-000000000003} = {bbbbbbbb-0000-4000-8000-000000000002}",
+      "\tEndGlobalSection",
+      "EndGlobal",
+    }, "\n")
+  end
+
+  it("adds to the folder asked for, between others, whatever the case of its GUID", function()
+    local dir, path = solution_file("All.sln", three_folders())
+    local file = touch(dir .. "/b2.txt")
+    assert.is_true(edit.add_file(path, folder_named(parse(path), "b"), file))
+    local sln = parse(path)
+    assert.are.same({ dir .. "/a.txt" }, items_of(folder_named(sln, "a")))
+    assert.are.same({ dir .. "/b.txt", file }, items_of(folder_named(sln, "b")))
+    assert.are.same({ dir .. "/c.txt" }, items_of(folder_named(sln, "c")))
+    assert.are.equal(folder_named(sln, "b").guid, folder_named(sln, "c").parent_guid)
+    local _, _, d = edit.add_folder(path, folder_named(sln, "b"), "d", { "c" })
+    assert.are.equal(folder_named(parse(path), "b").guid, parse(path).by_guid[d].parent_guid)
+    assert.matches("EndGlobal$", bytes(path), "no line break added at the end")
+  end)
+
+  it("adds to a folder whose Project line is the last of the file", function()
+    local dir, path = solution_file(
+      "All.sln",
+      ('Project("{%s}") = "z", "z", "{AB000000-0000-4000-8000-000000000001}"\nEndProject'):format(FOLDER)
+    )
+    local text = bytes(path):gsub("\nEndProject$", "")
+    local f = assert(io.open(path, "wb"))
+    f:write(text)
+    f:close()
+    local ok, err = edit.add_file(
+      path,
+      folder_named(parse(path), "z") or { guid = "AB000000-0000-4000-8000-000000000001", name = "z" },
+      touch(dir .. "/z.txt")
+    )
+    -- With no EndProject the block cannot be found: refused, not written into the wrong place
+    assert.is_nil(ok)
+    assert.matches("EndProject", err, 1, true)
+    assert.are.equal(text, bytes(path))
+  end)
+
+  it("refuses to nest a folder in a solution with no Global section, and writes nothing", function()
+    local _, path = solution_file(
+      "All.sln",
+      ('Project("{%s}") = "a", "a", "{AB000000-0000-4000-8000-000000000001}"\nEndProject\n'):format(FOLDER)
+    )
+    local before = bytes(path)
+    local ok, err = edit.add_folder(path, folder_named(parse(path), "a"), "b", {})
+    assert.is_nil(ok)
+    assert.matches("no Global section", err, 1, true)
+    assert.are.equal(before, bytes(path))
+    assert.is_true(edit.add_folder(path, nil, "root", { "a" }))
+    assert.truthy(folder_named(parse(path), "root"))
+  end)
+
+  it("writes into the file a symlink points to, keeping the link", function()
+    local dir, path = solution_file("All.sln", vs_sln("\n"))
+    local link = dir .. "/Link.sln"
+    assert(vim.uv.fs_symlink(path, link))
+    assert.is_true(edit.add_folder(link, nil, "tools", { "build", "docs" }))
+    assert.are.equal("link", vim.uv.fs_lstat(link).type)
+    assert.truthy(folder_named(parse(path), "tools"))
+  end)
+
+  it("refuses a read-only solution file and leaves it as it was", function()
+    local _, path = solution_file("All.sln", vs_sln("\n"))
+    local before = bytes(path)
+    vim.uv.fs_chmod(path, tonumber("444", 8))
+    local ok, err = edit.add_folder(path, nil, "tools", {})
+    vim.uv.fs_chmod(path, tonumber("644", 8))
+    assert.is_nil(ok)
+    assert.matches("read-only", err, 1, true)
+    assert.are.equal(before, bytes(path))
+  end)
+
+  it("refuses a file already listed under another spelling of its path", function()
+    local dir, path = solution_file("All.sln", vs_sln("\n"))
+    touch(dir .. "/build/build.cake")
+    local alias = dir .. "/alias"
+    assert(vim.uv.fs_symlink(dir .. "/build", alias))
+    local ok, err = edit.add_file(path, folder_named(parse(path), "build"), alias .. "/build.cake")
+    assert.is_nil(ok)
+    assert.matches("already in build", err, 1, true)
+  end)
+end)
+
+describe("solution_edit on .slnx written by hand", function()
+  local function count(text, pattern)
+    local _, n = text:gsub(pattern, "")
+    return n
+  end
+
+  it("keeps a solution on one line valid", function()
+    local dir, path = solution_file("All.slnx", '<Solution><Folder Name="/a/"></Folder></Solution>')
+    assert.is_true(edit.add_folder(path, nil, "bb", { "a" }))
+    assert.is_true(edit.add_file(path, folder_named(parse(path), "a"), touch(dir .. "/a.txt")))
+    local text = bytes(path)
+    assert.matches("^<Solution>", text)
+    assert.matches("</Solution>$", text)
+    local sln = parse(path)
+    assert.is_nil(folder_named(sln, "bb").parent_guid)
+    assert.are.same({ dir .. "/a.txt" }, items_of(folder_named(sln, "a")))
+    assert.truthy(text:find('<Folder Name="/a/">.-<File Path="a.txt" />.-</Folder>'))
+  end)
+
+  it("puts a new folder at the root after a folder that closed itself on the same line", function()
+    local _, path = solution_file("All.slnx", '<Solution><Folder Name="/a/" /></Solution>')
+    assert.is_true(edit.add_folder(path, nil, "bb", { "a" }))
+    assert.is_nil(folder_named(parse(path), "bb").parent_guid)
+  end)
+
+  it("finds a folder named relative to the one it sits in, instead of writing it twice", function()
+    local dir, path = solution_file(
+      "All.slnx",
+      '<Solution>\n  <Folder Name="/a/">\n    <Folder Name="b">\n    </Folder>\n  </Folder>\n</Solution>\n'
+    )
+    local b = folder_named(parse(path), "b")
+    assert.are.equal("/a/b/", b._folderpath)
+    assert.is_true(edit.add_file(path, b, touch(dir .. "/x.txt")))
+    local text = bytes(path)
+    assert.are.equal(2, count(text, "<Folder "))
+    assert.truthy(text:find('<Folder Name="b">\n      <File Path="x.txt" />\n    </Folder>', 1, true))
+  end)
+
+  it("adds to the outer of two nested folders after the inner one closes", function()
+    local dir, path = solution_file(
+      "All.slnx",
+      '<Solution>\n  <Folder Name="/build/">\n    <Folder Name="/build/ci/">\n      <File Path="ci.yml" />\n    </Folder>\n  </Folder>\n</Solution>\n'
+    )
+    assert.is_true(edit.add_file(path, folder_named(parse(path), "build"), touch(dir .. "/b.props")))
+    assert.truthy(bytes(path):find('    </Folder>\n    <File Path="b.props" />\n  </Folder>', 1, true))
+    assert.are.same({ dir .. "/b.props" }, items_of(folder_named(parse(path), "build")))
+    assert.are.same({ dir .. "/ci.yml" }, items_of(folder_named(parse(path), "ci")))
+  end)
+
+  it("finds a folder whose name it escaped", function()
+    local dir, path = solution_file("All.slnx", "<Solution>\n</Solution>\n")
+    assert.is_true(edit.add_folder(path, nil, "R&D", {}))
+    assert.is_true(edit.add_file(path, folder_named(parse(path), "R&D"), touch(dir .. "/plan.md")))
+    local text = bytes(path)
+    assert.are.equal(1, count(text, "<Folder "))
+    assert.are.same({ dir .. "/plan.md" }, items_of(folder_named(parse(path), "R&D")))
+  end)
+end)
+
+describe("tree nodes of solution folders", function()
+  local FIXTURES = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h") .. "/fixtures"
+
+  -- The commands find their target through these fields, and the ids they put
+  -- the cursor on are built the same way
+  for _, name in ipairs({ "Sample.sln", "Sample.slnx" }) do
+    it("tags folders and their items in " .. name, function()
+      local tree = assert(require("dotnet-tree.tree").build(FIXTURES .. "/" .. name))
+      local sln = parse(FIXTURES .. "/" .. name)
+      local checked = 0
+      local function walk(node)
+        if node.extra.kind == "sln_folder" then
+          local folder = sln.by_guid[node.extra.guid]
+          assert.truthy(folder, node.id)
+          assert.are.equal("dotnet:slnfolder:" .. folder.guid, node.id)
+          for _, item in ipairs(folder.solution_items) do
+            local child
+            for _, c in ipairs(node.children) do
+              if c.path == item.path then
+                child = c
+              end
+            end
+            assert.are.equal(folder.guid, child.extra.sln_folder)
+            assert.are.equal("dotnet:slnitem:" .. folder.guid .. ":" .. item.path, child.id)
+            checked = checked + 1
+          end
+        end
+        for _, c in ipairs(node.children or {}) do
+          walk(c)
+        end
+      end
+      walk(tree[1])
+      assert.are.equal(1, checked)
+    end)
+  end
+end)
+
 describe("solution_edit helpers", function()
   it("writes paths relative to the solution, with .. when outside", function()
     assert.are.equal("build/a.cake", edit.relative("/r/sln", "/r/sln/build/a.cake"))
@@ -384,23 +587,115 @@ describe("n and a on the solution and its folders", function()
     )
   end)
 
-  it("refuses with a reason, and leaves nothing behind", function()
+  local function said(text)
+    for _, m in ipairs(messages) do
+      if m:find(text, 1, true) then
+        return true
+      end
+    end
+    return false
+  end
+
+  it("says what it did", function()
+    local dir, path = solution_file("All.sln", vs_sln("\n"))
+    local build = folder_named(parse(path), "build")
+    touch(dir .. "/build/tools.json")
+    inputs = { dir .. "/build/tools.json", "tools" }
+    commands.add(state_on(path, { kind = "sln_folder", guid = build.guid }))
+    commands.new_file(state_on(path, { kind = "solution" }))
+    assert.is_true(said("tools.json to build"), vim.inspect(messages))
+    assert.is_true(said("created solution folder tools"), vim.inspect(messages))
+  end)
+
+  it("points n on a file that is already there to a", function()
     local dir, path = solution_file("All.sln", vs_sln("\n"))
     local build = folder_named(parse(path), "build")
     local before = bytes(path)
-    -- n on a file that is already there points to a
+    touch(dir .. "/build/build.cake")
     selects = { "file" }
     inputs = { dir .. "/build/build.cake" }
-    touch(dir .. "/build/build.cake")
     commands.new_file(state_on(path, { kind = "sln_folder", guid = build.guid }))
-    -- a on a file that is not there
+    assert.are.equal(before, bytes(path))
+    assert.is_true(said("press `a` to add it"))
+  end)
+
+  -- The default answer is the folder's directory: accepting it names no file
+  it("creates nothing when the answer is a directory", function()
+    local dir, path = solution_file("All.sln", vs_sln("\n"))
+    local docs = folder_named(parse(path), "docs")
+    local before = bytes(path)
+    selects = { "file" }
+    inputs = {
+      function(opts)
+        return opts.default
+      end,
+    }
+    commands.new_file(state_on(path, { kind = "sln_folder", guid = docs.guid }))
+    assert.are.equal(before, bytes(path))
+    assert.is_nil(vim.uv.fs_stat(dir .. "/docs"))
+    assert.is_true(said("give the file a name"))
+  end)
+
+  it("removes the file and the directories it made when the add fails", function()
+    local dir, path = solution_file("All.sln", vs_sln("\n"))
+    local build = folder_named(parse(path), "build")
+    local buf = vim.fn.bufadd(path)
+    vim.fn.bufload(buf)
+    vim.api.nvim_buf_set_lines(buf, 0, 0, false, { "# edited" })
+    selects = { "file" }
+    inputs = { dir .. "/build/deep/er/new.props" }
+    commands.new_file(state_on(path, { kind = "sln_folder", guid = build.guid }))
+    vim.api.nvim_buf_delete(buf, { force = true })
+    assert.is_nil(vim.uv.fs_stat(dir .. "/build/deep"))
+    assert.is_true(said("unsaved changes"))
+    assert.are.same({}, opened)
+  end)
+
+  it("refuses a with a path that is not a file", function()
+    local dir, path = solution_file("All.sln", vs_sln("\n"))
+    local build = folder_named(parse(path), "build")
+    local before = bytes(path)
     inputs = { dir .. "/build/missing.txt" }
     commands.add(state_on(path, { kind = "sln_folder", guid = build.guid }))
-    -- a on the solution itself
-    commands.add(state_on(path, { kind = "solution" }))
+    vim.fn.mkdir(dir .. "/build/sub", "p")
+    inputs = { dir .. "/build/sub" }
+    commands.add(state_on(path, { kind = "sln_folder", guid = build.guid }))
     assert.are.equal(before, bytes(path))
-    assert.matches("press `a` to add it", messages[1], 1, true)
-    assert.matches("no file at", messages[2], 1, true)
-    assert.matches("`n` on the solution creates one", messages[3], 1, true)
+    assert.is_true(said("no file at"))
+    assert.is_true(said("is a directory"))
+  end)
+
+  it("explains a on the solution, and a folder that is gone", function()
+    local _, path = solution_file("All.sln", vs_sln("\n"))
+    commands.add(state_on(path, { kind = "solution" }))
+    commands.add(state_on(path, { kind = "sln_folder", guid = "00000000-0000-0000-0000-000000000000" }))
+    assert.is_true(said("`n` on the solution creates one"))
+    assert.is_true(said("no longer in the solution file; press R"))
+  end)
+
+  it("acts on the folder of a solution item with n too", function()
+    local _, path = solution_file("All.sln", vs_sln("\n"))
+    local build = folder_named(parse(path), "build")
+    selects = { "solution folder" }
+    inputs = { "ci" }
+    commands.new_file(state_on(path, { kind = "file", sln_folder = build.guid }))
+    assert.are.equal(build.guid, folder_named(parse(path), "ci").parent_guid)
+  end)
+
+  -- A project, or a file in one, is not a solution target: the old `a` and `n`
+  it("leaves a and n on a project to packages, references and templates", function()
+    local _, path = solution_file("All.sln", vs_sln("\n"))
+    local before = bytes(path)
+    local offered
+    vim.ui.select = function(items)
+      offered = items
+    end
+    local project = state_on(path, { kind = "project", project = { path = "/src/Api/Api.csproj" } })
+    project.tree:get_node().name = "Api"
+    commands.add(project)
+    assert.are.same({ "package", "reference" }, offered)
+    commands.new_file(project)
+    assert.are.same({ "class", "interface", "record", "struct", "enum" }, offered)
+    assert.are.equal(before, bytes(path))
   end)
 end)

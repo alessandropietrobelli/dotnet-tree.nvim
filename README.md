@@ -28,8 +28,10 @@ This source renders that graph.
 
 - **Both solution formats** — legacy `.sln` and the newer XML `.slnx`
 - **Solution folders** rendered as real nodes, nested as declared — and edited from the tree:
-  `n` on the solution creates one, `n` on a folder creates a file in it or a subfolder, `a` adds a
-  file that already exists. The `.sln` or `.slnx` is written in place, keeping its formatting
+  `n` on the solution creates one, `n` on a solution folder creates a file in its directory on
+  disk and lists it there, or a subfolder, and `a` adds a file that already exists; on a file a
+  folder lists, both act on that folder. The `.sln` or `.slnx` is edited as text, keeping its line
+  endings and BOM
 - **Projects** with their `.csproj` pinned on top, package references and project references
 - **Central Package Management** — resolves versions from the `Directory.Packages.props`
   nearest to each project, following the import that chains a nested one to the root one;
