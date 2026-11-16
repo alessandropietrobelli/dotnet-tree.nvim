@@ -62,7 +62,7 @@ function M.check()
     })
   end
 
-  -- Optional integrations. `d` is the only thing that needs them, and it says
+  -- Optional integrations. `,d` is the only thing that needs them, and it says
   -- so on the keypress too; neither absence is an error for the tree itself.
   local debug_mod = require("dotnet-tree.debug")
   local has_dap = debug_mod.has_dap()
@@ -78,7 +78,7 @@ function M.check()
     if not debugger then
       table.insert(advice, "Install netcoredbg (`:MasonInstall netcoredbg`, or put it on PATH).")
     end
-    table.insert(advice, "Everything else works without them; only `d` (debug project) needs both.")
+    table.insert(advice, "Everything else works without them; only `,d` (debug project) needs both.")
     warn("debugging not available: " .. (has_dap and "netcoredbg not found" or "nvim-dap not installed"), advice)
   end
 
@@ -91,7 +91,7 @@ function M.check()
     end
   else
     warn("no .sln/.slnx found under " .. cwd, {
-      "Open Neovim at the repository root, or press `s` in the tree to pick one.",
+      "Open Neovim at the repository root, or press `,s` in the tree to pick one.",
     })
   end
 
@@ -103,14 +103,14 @@ function M.check()
       ok("remembered solution for this cwd: " .. persisted)
     else
       warn("remembered solution no longer exists: " .. persisted, {
-        "Press `s` in the tree to select a different one.",
+        "Press `,s` in the tree to select a different one.",
       })
     end
   end
 end
 
 --- One solution found: whether it can be read, and whether the projects it
---- lists are on disk. `r`, `t` and `w` start in a project's folder, so a
+--- lists are on disk. `,r`, `,t` and `,w` start in a project's folder, so a
 --- project that is gone cannot be run, and this is where to find out why.
 ---@param sln_path string
 function M.check_solution(sln_path)
@@ -125,7 +125,7 @@ function M.check_solution(sln_path)
   for _, proj in ipairs(sln.projects) do
     if proj.kind ~= "folder" and proj.path and vim.fn.filereadable(proj.path) == 0 then
       warn("    listed but not on disk: " .. proj.path, {
-        "The solution still lists this project; `r`, `t` and `w` cannot run it.",
+        "The solution still lists this project; `,r`, `,t` and `,w` cannot run it.",
       })
     end
   end
@@ -150,7 +150,7 @@ local function function_apps(solutions)
   return apps
 end
 
---- What `r` and `w` need for the Azure Functions apps of `solutions` (#57): `func`,
+--- What `,r` and `,w` need for the Azure Functions apps of `solutions` (#57): `func`,
 --- and Azurite for an app that keeps its storage there. Says nothing when no
 --- solution has a function app.
 ---@param solutions string[]
@@ -166,7 +166,7 @@ function M.check_functions(solutions)
     ok("Azure Functions Core Tools found (func)")
   else
     warn("func not found on PATH", {
-      "`r` on a function app needs Azure Functions Core Tools.",
+      "`,r` on a function app needs Azure Functions Core Tools.",
       "Install it: https://learn.microsoft.com/azure/azure-functions/functions-run-local",
     })
   end

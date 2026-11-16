@@ -55,7 +55,7 @@ local MAX_UNPARSED_LINES = 200
 
 local ACTIONS = { build = true, clean = true }
 
--- Jobs in flight, keyed by action and path: pressing `b` twice while the first
+-- Jobs in flight, keyed by action and path: pressing `,b` twice while the first
 -- build is still running would otherwise publish two lists over each other.
 local running = {}
 
@@ -255,7 +255,7 @@ function M.build(path, opts)
 
   if opts.notify ~= false then
     -- A copy of `cmd` itself, so the message says what runs and cannot drift
-    -- from it: `d` pins the configuration with `-c`, and a line that leaves it
+    -- from it: `,d` pins the configuration with `-c`, and a line that leaves it
     -- out describes another build (#40). Only the path is shortened, to the
     -- file name.
     local shown = vim.list_slice(cmd)

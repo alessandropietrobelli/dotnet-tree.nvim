@@ -189,6 +189,9 @@ neo-tree does not use. neo-tree's other defaults (`s` / `S` / `t` to open in a s
 | `r` / `b` | rename / rename keeping the extension |
 | `m` / `c` | move / copy to a path |
 | `y` / `x` / `p` | copy / cut / paste |
+
+`d`, `y` and `x` also take a selection, as long as it holds only files and folders of projects:
+packages, references, projects and solution items go one at a time.
 | **.NET** | |
 | `,s` | select solution (when the repo has more than one) |
 | `,e` | edit the project's `.csproj` |

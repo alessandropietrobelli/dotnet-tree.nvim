@@ -1,10 +1,10 @@
--- Which launch profile `r`, `d` and `w` → run start a project with (#51).
+-- Which launch profile `,r`, `,d` and `,w` → run start a project with (#51).
 --
 -- `dotnet run` uses the first `commandName: Project` profile in
 -- `Properties/launchSettings.json` unless told otherwise, and a web project
 -- usually has several (`http`, `https`). With more than one that can be
 -- started, the choice is asked once per project and remembered (store.lua);
--- `L` asks again. With one or none nothing is asked and nothing changes: that
+-- `,l` asks again. With one or none nothing is asked and nothing changes: that
 -- profile is what `dotnet run` would use anyway.
 local launch_settings = require("dotnet-tree.parser.launch_settings")
 local store = require("dotnet-tree.store")
@@ -88,7 +88,7 @@ function M.choose(project_path, cb)
   ask(project_path, choices, cb)
 end
 
---- Ask again which profile to use for `project_path` (`L`).
+--- Ask again which profile to use for `project_path` (`,l`).
 ---@param project_path string
 function M.pick(project_path)
   local choices, err = names(project_path)
@@ -96,7 +96,7 @@ function M.pick(project_path)
   if err then
     notify(err, vim.log.levels.WARN)
   elseif #choices == 0 then
-    notify(("%s has no launch profile that `r`, `d` and `w` can start (commandName Project)"):format(project))
+    notify(("%s has no launch profile that `,r`, `,d` and `,w` can start (commandName Project)"):format(project))
   elseif #choices == 1 then
     notify(("%s has one launch profile, %q: there is nothing to choose"):format(project, choices[1]))
   else

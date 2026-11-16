@@ -1,16 +1,16 @@
 -- `Properties/launchSettings.json`: the launch profiles `dotnet run` can use,
 -- and what the one in use declares.
 --
--- This is the file that makes `r` and `d` disagree (#33). `r` runs
--- `dotnet run`, which reads it; `d` starts the built assembly, which does not.
+-- This is the file that makes `,r` and `,d` disagree (#33). `,r` runs
+-- `dotnet run`, which reads it; `,d` starts the built assembly, which does not.
 -- On a `dotnet new webapi` the profile sets `ASPNETCORE_ENVIRONMENT` to
--- Development, so the same project debugged with `d` came up in Production:
+-- Development, so the same project debugged with `,d` came up in Production:
 -- `IsDevelopment()` false, no OpenAPI endpoints, `appsettings.Development.json`
 -- never read.
 --
 -- What is read is deliberately narrow: the names of the `Project` profiles, and
 -- four fields of the one in use; no MSBuild evaluation and no token expansion. Anything this cannot understand leaves
--- `d` behaving exactly as it did before the file existed -- an unreadable
+-- `,d` behaving exactly as it did before the file existed -- an unreadable
 -- profile is not a reason to raise, and it is not a licence to guess either.
 --
 -- Two things here are measured rather than assumed, and both would be wrong
@@ -19,7 +19,7 @@
 local M = {}
 
 -- `commandName` values other than this one start something else -- Docker, IIS
--- Express -- and none of them is the assembly `d` just built.
+-- Express -- and none of them is the assembly `,d` just built.
 local COMMAND_NAME = "Project"
 
 -- Fields consumed below. Everything else in a profile (`launchBrowser`,
@@ -66,7 +66,7 @@ function M.split_args(text)
   return args
 end
 
---- Every profile `r`, `d` and `w` → run can start (`commandName: Project`), out
+--- Every profile `,r`, `,d` and `,w` → run can start (`commandName: Project`), out
 --- of a decoded launchSettings table, in file order. The first is the one
 --- `dotnet run` picks with no `--launch-profile`.
 ---
@@ -81,7 +81,7 @@ end
 --- after the project. Measured on a project with three `Project` profiles --
 --- one first in the file, one named after the project, one alphabetically
 --- first -- `dotnet run` with no `--launch-profile` used the first in the
---- file. Picking the project-named one would have made `d` disagree with `r`
+--- file. Picking the project-named one would have made `,d` disagree with `,r`
 --- on exactly the file that exists to make them agree.
 ---
 --- The limit: a profile name that also occurs earlier in the text as a string
@@ -251,7 +251,7 @@ local function load(dir)
 end
 
 --- The names of a project's usable profiles (#51), first in the file first:
---- those `r`, `d` and `w` → run can start, so the ones to choose from.
+--- those `,r`, `,d` and `,w` → run can start, so the ones to choose from.
 ---@param dir string the project directory
 ---@return string[] names
 ---@return string|nil err why there are none when the file is there but cannot be read
@@ -268,7 +268,7 @@ end
 --- Read the launch profile for a project, or nil when there is nothing usable.
 ---
 --- Comments and trailing commas are allowed, as `dotnet` allows them (see
---- M.strip_jsonc). A file that still cannot be decoded leaves `d` exactly as
+--- M.strip_jsonc). A file that still cannot be decoded leaves `,d` exactly as
 --- it was, and `err` says why, so it is not silently ignored.
 ---@param dir string the project directory
 ---@param name string|nil the profile chosen (#51); nil for the one `dotnet run` picks by default

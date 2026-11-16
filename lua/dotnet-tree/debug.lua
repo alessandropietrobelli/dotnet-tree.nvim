@@ -1,4 +1,4 @@
--- `d` on a project: build it, then start netcoredbg on what it built.
+-- `,d` on a project: build it, then start netcoredbg on what it built.
 --
 -- The debugger is the usual reason to leave Neovim for Rider, and the gesture
 -- this plugin is built around is "cursor on a project, press a key". So the
@@ -12,7 +12,7 @@
 -- single test. The first is a separate feature; the second belongs to
 -- neotest-dotnet.
 --
--- `Properties/launchSettings.json` *is* read, since #33: without it `r` and `d`
+-- `Properties/launchSettings.json` *is* read, since #33: without it `,r` and `,d`
 -- started the same web project in two different environments. See
 -- dotnet-tree/parser/launch_settings.lua.
 --
@@ -28,7 +28,7 @@ local M = {}
 local ADAPTER_ARGS = { "--interpreter=vscode" }
 
 -- What `dotnet build` produces with no -c flag. Kept as a constant rather than
--- a prompt: `d` is meant to be one keypress, and debugging a Release build with
+-- a prompt: `,d` is meant to be one keypress, and debugging a Release build with
 -- optimisations on is not what anyone means by it.
 M.configuration = "Debug"
 
@@ -237,7 +237,7 @@ end
 --- Everything needed to launch a project, or a reason why it cannot be.
 ---
 --- Resolution is deliberately separate from launching so the refusals are
---- testable without nvim-dap or a debugger present, and so `d` can refuse a
+--- testable without nvim-dap or a debugger present, and so `,d` can refuse a
 --- library *before* spending a build on it.
 ---
 ---@param project_path string path to a .csproj/.fsproj/.vbproj
@@ -273,10 +273,10 @@ function M.resolve(project_path)
     -- and saying "this is a library" sends the reader looking for a bug that is
     -- not there. Only xunit v3 test projects are executables; xunit v2, NUnit
     -- and MSTest ones build a library that the test host loads, so there is
-    -- nothing for a debugger to launch and `t` is the answer.
+    -- nothing for a debugger to launch and `,t` is the answer.
     if project.is_test_project then
       return nil,
-        ("%s is a test project that builds a library: nothing to launch, use `t` or neotest-dotnet"):format(name)
+        ("%s is a test project that builds a library: nothing to launch, use `,t` or neotest-dotnet"):format(name)
     end
     return nil,
       ("%s is a library (OutputType %s) and has no entry point"):format(
@@ -400,7 +400,7 @@ local function launch(dap, target, program, opts)
 
   -- A test project is a runnable assembly and debugging it is legitimate --
   -- launching it runs the whole suite under the debugger, which is a real thing
-  -- to want. It is not refused; it is named, so nobody presses `d` expecting an
+  -- to want. It is not refused; it is named, so nobody presses `,d` expecting an
   -- application and gets a test run.
   if target.is_test_project then
     notify(
@@ -412,7 +412,7 @@ local function launch(dap, target, program, opts)
   end
 
   -- What `dotnet run` would have used -- with `--launch-profile` when one was
-  -- chosen (#51) -- so that `r` and `d` start the same project the same way. A
+  -- chosen (#51) -- so that `,r` and `,d` start the same project the same way. A
   -- project with no launchSettings.json gets `nil` and the configuration below
   -- is what it always was; one whose file cannot be read, or that no longer has
   -- the profile chosen, says so rather than launching as if nothing was wrong.
@@ -471,7 +471,7 @@ function M.debug(project_path, opts)
 
   local has_dap, dap = M.has_dap()
   if not has_dap then
-    notify("nvim-dap is not installed; `d` needs it. See :checkhealth dotnet-tree")
+    notify("nvim-dap is not installed; `,d` needs it. See :checkhealth dotnet-tree")
     return
   end
 
@@ -599,9 +599,9 @@ function M.debug(project_path, opts)
       -- Code with Release builds using compiler optimizations results in a
       -- degraded debugging experience (e.g. breakpoints will not be hit)".
       --
-      -- It goes here rather than in dotnet-tree/build.lua because `b` has the
+      -- It goes here rather than in dotnet-tree/build.lua because `,b` has the
       -- other contract: a project that declares Release means it for the build.
-      -- `d` is the key that means Debug (see M.configuration).
+      -- `,d` is the key that means Debug (see M.configuration).
       args = { "-c", M.configuration },
       on_complete = function(result)
         if result.code ~= 0 then

@@ -5,12 +5,28 @@ local csproj = require("dotnet-tree.parser.csproj")
 
 local M = {}
 
--- A part as C# accepts it: what is not a letter, a digit or `_` becomes `_`,
--- and a leading digit gets a `_` in front
+-- C#'s reserved words: a part spelled like one gets `@`, as Visual Studio does
+local KEYWORDS = {}
+for word in
+  ([[abstract as base bool break byte case catch char checked class const continue decimal default
+  delegate do double else enum event explicit extern false finally fixed float for foreach goto if implicit in
+  int interface internal is lock long namespace new null object operator out override params private protected
+  public readonly ref return sbyte sealed short sizeof stackalloc static string struct switch this throw true try
+  typeof uint ulong unchecked unsafe ushort using virtual void volatile while]]):gmatch("%S+")
+do
+  KEYWORDS[word] = true
+end
+
+-- A part as C# accepts it: ASCII punctuation, spaces and control characters
+-- become `_` (letters of other alphabets stay, as C# allows them), a leading
+-- digit gets a `_` in front, and a reserved word an `@`
 local function identifier(part)
-  part = part:gsub("[^%w_]", "_")
+  part = part:gsub("[%c%p%s]", "_")
   if part:match("^%d") then
     part = "_" .. part
+  end
+  if KEYWORDS[part] then
+    part = "@" .. part
   end
   return part
 end
@@ -37,7 +53,7 @@ function M.root(project_path)
 end
 
 --- The namespace for a file created in `dir`, inside the project at
---- `project_path`.
+--- `project_path`; a `dir` outside the project gets the root namespace.
 ---@param project_path string
 ---@param dir string
 ---@return string
@@ -48,8 +64,8 @@ function M.for_dir(project_path, dir)
   end
   local project_dir = vim.fs.normalize(vim.fn.fnamemodify(project_path, ":h"))
   local target = vim.fs.normalize(dir)
-  if target:sub(1, #project_dir) == project_dir then
-    for folder in target:sub(#project_dir + 1):gmatch("[^/]+") do
+  if target:sub(1, #project_dir + 1) == project_dir .. "/" then
+    for folder in target:sub(#project_dir + 2):gmatch("[^/]+") do
       table.insert(parts, identifier(folder))
     end
   end

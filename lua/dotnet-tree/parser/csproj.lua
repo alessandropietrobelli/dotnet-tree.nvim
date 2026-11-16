@@ -123,7 +123,11 @@ function M.parse(csproj_path)
   -- and one that chains upward (#30) makes the file above it load-bearing as
   -- well. `props_stamp` covers the whole chain, which one path and one mtime
   -- could not.
-  local inherited, props_stamp = props.inherited_frameworks(dir)
+  local inherited, frameworks_stamp = props.inherited_frameworks(dir)
+  -- RootNamespace can come from further up the chain than the frameworks do,
+  -- so the files it was read from count for the cache as well
+  local inherited_namespace, namespace_stamp = props.inherited_root_namespace(dir)
+  local props_stamp = (frameworks_stamp or "") .. "#" .. namespace_stamp
 
   local cached = cache[csproj_path]
   if cached and cached.mtime == mtime and cached.props_stamp == props_stamp then
@@ -170,9 +174,10 @@ function M.parse(csproj_path)
   -- basename, and the caller is the one that knows which it is looking at.
   result.output_type = read_property(root, "OutputType")
   result.assembly_name = read_property(root, "AssemblyName")
-  -- The namespace `n` starts a new file's from: the project's own, else the
-  -- one Directory.Build.props sets for every project, as written
-  result.root_namespace = read_property(root, "RootNamespace") or props.inherited_root_namespace(dir)
+  -- The root namespace `n` builds a new file's namespace from: the project's
+  -- own `<RootNamespace>`, else the one the Directory.Build.props chain sets,
+  -- as written (dotnet-tree.namespace expands what it can)
+  result.root_namespace = read_property(root, "RootNamespace") or inherited_namespace
 
   -- The SDK is what makes `output_type == nil` readable: nil means "the project
   -- did not say", and only the SDK says what that amounts to.

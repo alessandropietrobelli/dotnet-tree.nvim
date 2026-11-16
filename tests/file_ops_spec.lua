@@ -26,6 +26,10 @@ local function bytes(path)
   return content
 end
 
+local function display_of(path)
+  return vim.fn.fnamemodify(path, ":~:.")
+end
+
 local function parse(path)
   solution.invalidate(path)
   return assert(solution.parse(path))
@@ -118,25 +122,44 @@ describe("lsp_files", function()
     tbl[key] = value
   end
 
-  local function client(name, capabilities, result)
+  -- `answer` is what request_sync returns: a response, or a function giving
+  -- its values (nil and a reason, or an error)
+  local function client(name, capabilities, answer)
     return {
       name = name,
       offset_encoding = "utf-16",
       server_capabilities = { workspace = { fileOperations = capabilities } },
       request_sync = function(_, method, params)
         table.insert(requests, { name = name, method = method, params = params })
-        return { result = result }
+        if type(answer) == "function" then
+          return answer()
+        end
+        return answer
       end,
       notify = function(_, method, params)
         table.insert(notifications, { name = name, method = method, params = params })
+        return true
       end,
     }
   end
 
+  local function edit_of(...)
+    local changes = {}
+    for _, path in ipairs({ ... }) do
+      changes[vim.uri_from_fname(path)] = { { newText = "x", range = {} } }
+    end
+    return { result = { changes = changes } }
+  end
+
+  local messages
+
   before_each(function()
-    saved, requests, notifications, applied = {}, {}, {}, {}
+    saved, requests, notifications, applied, messages = {}, {}, {}, {}, {}
     stub(vim.lsp.util, "apply_workspace_edit", function(e)
       table.insert(applied, e)
+    end)
+    stub(vim, "notify", function(msg)
+      table.insert(messages, msg)
     end)
   end)
 
@@ -150,20 +173,20 @@ describe("lsp_files", function()
   local CS = { filters = { { pattern = { glob = "**/*.cs", matches = "file" } } } }
 
   it("asks the servers that want to know, applies their edits, and tells them after", function()
-    local edit_result = { changes = {} }
+    local answer = edit_of("/src/Api/Foo.cs", "/src/Api/Uses.cs")
     stub(vim.lsp, "get_clients", function()
       return {
-        client("roslyn", { willRename = CS, didRename = CS }, edit_result),
+        client("roslyn", { willRename = CS, didRename = CS }, answer),
         client("other", {}, nil),
       }
     end)
-    local changed = lsp_files.will_rename("/src/Api/Foo.cs", "/src/Api/Bar.cs")
+    local edits = lsp_files.will_rename("/src/Api/Foo.cs", "/src/Api/Bar.cs")
     lsp_files.did_rename("/src/Api/Foo.cs", "/src/Api/Bar.cs")
-    assert.are.same({ "roslyn" }, changed)
+    assert.are.same({ servers = { "roslyn" }, files = 2 }, edits)
     assert.are.equal(1, #requests)
     assert.are.equal("workspace/willRenameFiles", requests[1].method)
     assert.are.equal(vim.uri_from_fname("/src/Api/Bar.cs"), requests[1].params.files[1].newUri)
-    assert.are.same({ edit_result }, applied)
+    assert.are.same({ answer.result }, applied)
     assert.are.same(
       { "workspace/didRenameFiles" },
       vim.tbl_map(function(n)
@@ -176,8 +199,65 @@ describe("lsp_files", function()
     stub(vim.lsp, "get_clients", function()
       return { client("roslyn", { willRename = CS }, {}) }
     end)
-    assert.are.same({}, lsp_files.will_rename("/src/Api/appsettings.json", "/src/Api/app.json"))
+    assert.are.same({ servers = {}, files = 0 }, lsp_files.will_rename("/src/Api/appsettings.json", "/src/Api/a.json"))
     assert.are.same({}, requests)
+  end)
+
+  it("asks about a folder only a server matching folders", function()
+    local folder = vim.fn.tempname()
+    vim.fn.mkdir(folder, "p")
+    local FOLDERS = { filters = { { pattern = { glob = "**", matches = "folder" } } } }
+    stub(vim.lsp, "get_clients", function()
+      return { client("folders", { willRename = FOLDERS }, edit_of("/x.cs")), client("files", { willRename = CS }, {}) }
+    end)
+    lsp_files.will_rename(folder, folder .. "-new")
+    assert.are.same(
+      { "folders" },
+      vim.tbl_map(function(r)
+        return r.name
+      end, requests)
+    )
+    vim.fn.delete(folder, "rf")
+  end)
+
+  it("counts no edits from an answer that changes nothing", function()
+    stub(vim.lsp, "get_clients", function()
+      return { client("roslyn", { willRename = CS }, { result = { changes = {} } }) }
+    end)
+    assert.are.same({ servers = {}, files = 0 }, lsp_files.will_rename("/a/Foo.cs", "/a/Bar.cs"))
+    assert.are.same({}, applied)
+  end)
+
+  it("says why a server was not heard, and goes on with the others", function()
+    stub(vim.lsp, "get_clients", function()
+      return {
+        client("slow", { willRename = CS }, function()
+          return nil, "timeout"
+        end),
+        client("refusing", { willRename = CS }, { err = { message = "boom" } }),
+        client("broken", { willRename = CS }, function()
+          error("crashed")
+        end),
+        client("good", { willRename = CS }, edit_of("/a/Foo.cs")),
+      }
+    end)
+    local edits = lsp_files.will_rename("/a/Foo.cs", "/a/Bar.cs")
+    assert.are.same({ "good" }, edits.servers)
+    local text = table.concat(messages, "\n")
+    assert.matches("slow was not asked about renaming Foo.cs: it did not answer in time", text, 1, true)
+    assert.matches("refusing refused renaming Foo.cs: boom", text, 1, true)
+    assert.matches("broken failed on renaming Foo.cs", text, 1, true)
+  end)
+
+  it("stops when the edits cannot be applied", function()
+    stub(vim.lsp.util, "apply_workspace_edit", function()
+      error("bad range")
+    end)
+    stub(vim.lsp, "get_clients", function()
+      return { client("roslyn", { willRename = CS }, edit_of("/a/Foo.cs")) }
+    end)
+    local edits = lsp_files.will_rename("/a/Foo.cs", "/a/Bar.cs")
+    assert.matches("roslyn's edits for renaming Foo.cs could not be applied", edits.err, 1, true)
   end)
 
   -- That plugin listens to neo-tree's events and would apply the same edits
@@ -291,7 +371,7 @@ describe("file operations from the tree", function()
     package.loaded["dotnet-tree.lsp_files"] = {
       will_rename = function(src, dest)
         table.insert(lsp_calls, { "will", src, dest })
-        return { "roslyn" }
+        return { servers = { "roslyn" }, files = 2 }
       end,
       did_rename = function(src, dest)
         table.insert(lsp_calls, { "did", src, dest })
@@ -331,7 +411,14 @@ describe("file operations from the tree", function()
   end)
 
   local function file(path)
-    return { name = vim.fn.fnamemodify(path, ":t"), path = path, extra = { kind = "file" } }
+    return {
+      name = vim.fn.fnamemodify(path, ":t"),
+      path = path,
+      extra = { kind = "file" },
+      get_parent_id = function()
+        return "project"
+      end,
+    }
   end
 
   it("renames a file, telling the language servers before and after", function()
@@ -342,7 +429,7 @@ describe("file operations from the tree", function()
       { "will", dir .. "/src/Api/Foo.cs", dir .. "/src/Api/Bar.cs" },
       { "did", dir .. "/src/Api/Foo.cs", dir .. "/src/Api/Bar.cs" },
     }, lsp_calls)
-    assert.is_true(said("code updated by roslyn"))
+    assert.is_true(said("2 files edited by roslyn, not saved yet: :wa"))
   end)
 
   it("refuses a rename over another file, or to a path", function()
@@ -512,6 +599,145 @@ describe("file operations from the tree", function()
     commands.copy(state_on(file(dir .. "/src/Api/Bar.cs")))
     assert.is_true(said("already exists"))
   end)
+
+  -- A selection: files and folders of projects only, with one question
+  it("deletes a selection of files and folders after one question", function()
+    vim.fn.mkdir(dir .. "/src/Api/Old", "p")
+    write(dir .. "/src/Api/Old.cs", "")
+    commands.delete_visual(state_on(file(dir .. "/src/Api/Foo.cs")), {
+      file(dir .. "/src/Api/Foo.cs"),
+      file(dir .. "/src/Api/Old.cs"),
+      {
+        name = "Old",
+        path = dir .. "/src/Api/Old",
+        extra = { kind = "folder" },
+        get_parent_id = function()
+          return "project"
+        end,
+      },
+    })
+    assert.are.equal(1, #vim.tbl_filter(function(c)
+      return c:find("^Delete ")
+    end, confirms))
+    assert.are.equal(0, vim.fn.filereadable(dir .. "/src/Api/Foo.cs"))
+    assert.are.equal(0, vim.fn.filereadable(dir .. "/src/Api/Old.cs"))
+    assert.are.equal(0, vim.fn.isdirectory(dir .. "/src/Api/Old"))
+  end)
+
+  it("deletes nothing from a selection that reaches a project's file or a package", function()
+    local package = { name = "Serilog", extra = { kind = "package", package = { name = "Serilog" } } }
+    commands.delete_visual(state_on(file(dir .. "/src/Api/Foo.cs")), { file(dir .. "/src/Api/Foo.cs"), package })
+    commands.delete_visual(state_on(file(dir .. "/src/Api/Foo.cs")), { file(dir .. "/src/Api/Foo.cs"), file(project) })
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/Foo.cs"))
+    assert.are.equal(1, vim.fn.filereadable(project))
+    assert.are.same({}, confirms)
+    assert.are.same({}, terminals)
+    assert.is_true(said("only files and folders of projects can be deleted together, not Serilog"))
+    assert.is_true(said("not Api.csproj"))
+  end)
+
+  it("cuts a selection and pastes it all, then forgets it", function()
+    vim.fn.mkdir(dir .. "/src/Api/Models", "p")
+    write(dir .. "/src/Api/Baz.cs", "")
+    local state = state_on(file(dir .. "/src/Api/Foo.cs"))
+    commands.cut_to_clipboard_visual(state, { file(dir .. "/src/Api/Foo.cs"), file(dir .. "/src/Api/Baz.cs") })
+    local target = state_on({ name = "Models", path = dir .. "/src/Api/Models", extra = { kind = "folder" } })
+    target.dotnet_clipboard = state.dotnet_clipboard
+    commands.paste_from_clipboard(target)
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/Models/Foo.cs"))
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/Models/Baz.cs"))
+    assert.is_nil(target.dotnet_clipboard)
+  end)
+
+  it("keeps a cut that did not move, and says why", function()
+    local state = state_on(file(dir .. "/src/Api/Foo.cs"))
+    commands.cut_to_clipboard(state)
+    local same = state_on(file(dir .. "/src/Api/Foo.cs"))
+    same.dotnet_clipboard = state.dotnet_clipboard
+    commands.paste_from_clipboard(same)
+    assert.is_true(said("is already there"))
+    assert.truthy(same.dotnet_clipboard, "still there to paste elsewhere")
+  end)
+
+  it("says a copied file is gone instead of pasting it", function()
+    local state = state_on(file(dir .. "/src/Api/Foo.cs"))
+    commands.copy_to_clipboard(state)
+    os.remove(dir .. "/src/Api/Foo.cs")
+    vim.fn.mkdir(dir .. "/src/Api/Models", "p")
+    local target = state_on({ name = "Models", path = dir .. "/src/Api/Models", extra = { kind = "folder" } })
+    target.dotnet_clipboard = state.dotnet_clipboard
+    commands.paste_from_clipboard(target)
+    assert.is_true(said("is no longer there"))
+    target.dotnet_clipboard.action = "cut"
+    commands.paste_from_clipboard(target)
+    assert.are.same({}, lsp_calls, "no language server asked about a file that is gone")
+  end)
+
+  -- The servers' edits come before the move, and neo-tree gives up in silence
+  it("refuses a move neo-tree would refuse before asking the language servers", function()
+    vim.fn.mkdir(dir .. "/src/Api/Models", "p")
+    local models = { name = "Models", path = dir .. "/src/Api/Models", extra = { kind = "folder" } }
+    inputs = { display_of(dir .. "/src/Api/Models") }
+    commands.move(state_on(models))
+    assert.is_true(said("cannot move"))
+    assert.are.same({}, lsp_calls)
+  end)
+
+  it("moves a folder into another, keeping its name", function()
+    vim.fn.mkdir(dir .. "/src/Api/Models", "p")
+    write(dir .. "/src/Api/Models/Order.cs", "")
+    vim.fn.mkdir(dir .. "/src/Api/Domain", "p")
+    inputs = { dir .. "/src/Api/Domain/" }
+    commands.move(state_on({ name = "Models", path = dir .. "/src/Api/Models", extra = { kind = "folder" } }))
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/Domain/Models/Order.cs"))
+    assert.are.same({ "will", dir .. "/src/Api/Models", dir .. "/src/Api/Domain/Models" }, lsp_calls[1])
+  end)
+
+  it("does not move when the language servers' edits could not be applied", function()
+    package.loaded["dotnet-tree.lsp_files"].will_rename = function()
+      return { servers = {}, files = 0, err = "roslyn's edits could not be applied" }
+    end
+    inputs = { "Bar.cs" }
+    commands.rename(state_on(file(dir .. "/src/Api/Foo.cs")))
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/Foo.cs"))
+    assert.is_true(said("roslyn's edits could not be applied; "))
+    assert.is_true(said("Foo.cs was not renamed"))
+  end)
+
+  -- A file listed as a solution item can be moved through its project too
+  it("updates the solution when a solution item moves through its project", function()
+    write(dir .. "/src/Api/appsettings.json", "{}")
+    local text = bytes(sln_path):gsub(
+      "\t\tbuild\\version.props = build\\version.props\n",
+      "\t\tbuild\\version.props = build\\version.props\n\t\tsrc\\Api\\appsettings.json = src\\Api\\appsettings.json\n"
+    )
+    write(sln_path, text)
+    inputs = { "appsettings.Base.json" }
+    commands.rename(state_on(file(dir .. "/src/Api/appsettings.json")))
+    assert.truthy(bytes(sln_path):find("src\\Api\\appsettings.Base.json", 1, true))
+    assert.is_nil(bytes(sln_path):find("src\\Api\\appsettings.json", 1, true))
+  end)
+
+  it("warns when the project names a file renamed under it", function()
+    write(project, '<Project><ItemGroup><None Update="appsettings.json" /></ItemGroup></Project>')
+    write(dir .. "/src/Api/appsettings.json", "{}")
+    inputs = { "settings.json" }
+    commands.rename(state_on(file(dir .. "/src/Api/appsettings.json")))
+    assert.is_true(said("appsettings.json is named in Api.csproj"))
+  end)
+
+  it("has no trash, and says so", function()
+    commands.trash(state_on(file(dir .. "/src/Api/Foo.cs")))
+    assert.is_true(said("there is no trash"))
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/Foo.cs"))
+  end)
+
+  it("words a refused delete as a delete", function()
+    commands.delete(state_on({ name = "All.sln", extra = { kind = "solution" } }))
+    commands.delete(state_on({ name = "build", extra = { kind = "sln_folder", guid = "X" } }))
+    assert.is_true(said("cannot delete All.sln: the solution file is not deleted from the tree"))
+    assert.is_true(said("cannot delete build: a solution folder only exists in the solution file, and is not deleted"))
+  end)
 end)
 
 -- tpodolak's point on #50: neo-tree's keys for files mean the same here, and
@@ -560,6 +786,42 @@ describe("default mappings", function()
       assert.are.equal(1, #keys, command)
       assert.matches("^,", keys[1], command)
     end
+  end)
+
+  -- neo-tree's `s`, `t`, `w`... open what a node's path names: a package has
+  -- none, and would open as a buffer named after its id
+  it("opens with neo-tree's open commands only nodes that are files", function()
+    local opened = {}
+    package.loaded["neo-tree.sources.common.commands"] = {
+      open_vsplit = function()
+        table.insert(opened, "vsplit")
+      end,
+      toggle_node = function()
+        table.insert(opened, "toggle")
+      end,
+    }
+    package.loaded["dotnet-tree.commands"] = nil
+    local commands = require("dotnet-tree.commands")
+    local function state_with(node)
+      function node.has_children()
+        return true
+      end
+      function node.get_id()
+        return "id"
+      end
+      return { tree = {
+        get_node = function()
+          return node
+        end,
+      } }
+    end
+    commands.open_vsplit(state_with({ name = "Serilog", extra = { kind = "package" } }))
+    commands.open_vsplit(
+      state_with({ name = "Foo.cs", path = "/src/Foo.cs", type = "file", extra = { kind = "file" } })
+    )
+    assert.are.same({ "toggle", "vsplit" }, opened)
+    package.loaded["neo-tree.sources.common.commands"] = nil
+    package.loaded["dotnet-tree.commands"] = nil
   end)
 
   it("map only commands the source has", function()

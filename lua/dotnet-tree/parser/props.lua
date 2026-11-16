@@ -239,29 +239,37 @@ end
 
 --- The `RootNamespace` a project in `dir` inherits, from the nearest
 --- `Directory.Build.props` and the files it chains up to; nil when none sets
---- one. Written as it is, `$(...)` references included.
+--- one. Written as it is, `$(...)` references included. The nearest file that
+--- sets it wins, as it does in MSBuild when the import comes first.
+---
+--- The second value is a stamp over the files read, path and mtime, for a
+--- caller that caches what it found (see M.inherited_frameworks).
 ---@param dir string
 ---@return string|nil
+---@return string stamp
 function M.inherited_root_namespace(dir)
   local path = M.find_up(dir, "Directory.Build.props")
+  local stamp = {}
   local guard = 32
   while path and guard > 0 do
     guard = guard - 1
     path = vim.fs.normalize(path)
     local entry = read_props(path)
     if not entry then
-      return nil
+      break
     end
+    table.insert(stamp, path .. "@" .. entry.mtime)
     if entry.root_namespace then
-      return entry.root_namespace
+      return entry.root_namespace, table.concat(stamp, "|")
     end
     if not entry.imports_above then
-      return nil
+      break
     end
     local dir_of_file = vim.fn.fnamemodify(path, ":h")
     local above = vim.fn.fnamemodify(dir_of_file, ":h")
     path = above ~= dir_of_file and M.find_up(above, "Directory.Build.props") or nil
   end
+  return nil, table.concat(stamp, "|")
 end
 
 return M

@@ -13,9 +13,9 @@ mappings may land in a minor release; they will always be listed here.
 
 - **The keys follow neo-tree's.** Files and folders use the keys neo-tree's
   filesystem source uses, and the .NET actions moved under `,`, which neo-tree
-  does not use, so `d` no longer starts a debugger where neo-tree deletes and
-  neo-tree's `s`, `S`, `t`, `w`, `e` (open in a split, a tab, a picked window)
-  work again
+  does not use, so `d` no longer starts a debugger where neo-tree deletes, and
+  neo-tree's `s`, `S`, `t` and `w` (open in a split, a tab, a picked window)
+  and `e` (toggle auto-expand width) work again
   ([#50](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/50)):
 
   | Action | 0.3 | Now |
@@ -43,8 +43,9 @@ mappings may land in a minor release; they will always be listed here.
   `d` deletes. `d` on a package, a project reference or a project removes it
   with `dotnet`, after asking, and on a solution item takes it off its folder,
   leaving the file on disk; a renamed or moved solution item keeps its place in
-  the solution. Renames and moves are sent to the language servers that ask for
-  them (`workspace/willRenameFiles`)
+  the solution. `d`, `y` and `x` take a selection of files and folders.
+  Renames and moves are sent to the language servers that ask for them
+  (`workspace/willRenameFiles`)
   ([#50](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/50)).
 - Solution folders can be edited from the tree: `n` on the solution creates
   one, `n` on a solution folder creates a file in its directory and adds it, or
@@ -62,10 +63,10 @@ mappings may land in a minor release; they will always be listed here.
 ### Fixed
 
 - `n` uses the project's `<RootNamespace>`, from the project or the
-  `Directory.Build.props` above it, with `$(MSBuildProjectName)` expanded,
-  instead of always the project's name; without one it uses MSBuild's default.
-  Folder names that are not valid in C# become valid parts (`Read-Models` →
-  `Read_Models`).
+  `Directory.Build.props` above it, with `$(MSBuildProjectName)` and
+  `$(AssemblyName)` expanded, instead of always the project's name; without one
+  it uses MSBuild's default. Folder names that are not valid in C# become valid
+  parts (`Read-Models` → `Read_Models`, `event` → `@event`).
 - `,d` debugs a project whose `AssemblyName` is written as a property, such as
   `$(ToolName)`, instead of refusing it. MSBuild names the assembly whatever the
   property expands to. When MSBuild cannot be asked, as on an SDK older than 8,

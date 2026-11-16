@@ -272,7 +272,7 @@ describe("debug.resolve", function()
     local target, reason = dbg.resolve(FIXTURES .. "/TestProjectLibrary.csproj")
     assert.is_nil(target)
     assert.is_truthy(reason:find("test project", 1, true), reason)
-    assert.is_truthy(reason:find("`t`", 1, true), reason)
+    assert.is_truthy(reason:find("`,t`", 1, true), reason)
   end)
 
   it("refuses an OutputType it cannot evaluate rather than assuming Exe", function()

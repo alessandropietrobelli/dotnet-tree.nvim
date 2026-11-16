@@ -387,22 +387,33 @@ depends on what the node stands for:
   b     rename        the same, keeping the extension
   m     move          the prompt takes a path; a directory keeps the name
   c     copy          the same, copying
-  y x p copy, cut,    `p` on a folder, a file (its folder) or a project
+  y x p copy, cut,    `p` on a folder, a project's file (its folder) or a project
         paste         (its directory)
 
-A renamed or moved solution item keeps its place in the solution: the new path
-is written in the solution file. The rest is refused with the reason: the
-solution, a solution folder, a project (whose file the solution and other
-projects point to), a project's own file, the groups (Packages, Dependencies)
-and what has no file of its own.
+A file the solution lists keeps its place in the solution when it is renamed
+or moved, whether from its solution folder or from its project: the new path
+is written in the solution file. A file the project file names (a
+`<None Update>`, a `<Compile Remove>`, an embedded resource) is not rewritten
+there; a message says so. Renaming, moving or copying anything else is refused
+with the reason: the solution, a solution folder, a project (whose file the
+solution and other projects point to), a project's own file, the groups
+(Packages, Projects, Dependencies, Frameworks) and what has no file of its own.
+
+With a selection (|v| or neo-tree's own), `d`, `y` and `x` act on all of it
+when it holds only files and folders of projects: one question before a
+delete, and `p` pastes all of it. A selection that reaches a package, a
+reference, a project, a project's file or a solution item does nothing and
+says why; those go one at a time.
 
 The work on disk is neo-tree's own: open buffers follow a renamed file, and
-the events other plugins listen to are fired. Before a rename or a move, the
-language servers that declare `workspace/willRenameFiles` for that file are
-asked for their edits, which are applied; after it they get
-`workspace/didRenameFiles`. Roslyn declares it for .razor files only, so
-renaming a .cs file does not rename its type. With nvim-lsp-file-operations
-installed, that plugin does this instead.
+the events other plugins listen to are fired. A move neo-tree would refuse
+(into itself, onto another volume, over another file) is refused before
+anything else happens. Then the language servers that declare
+`workspace/willRenameFiles` for that file are asked for their edits, which are
+applied to buffers that are not saved yet, as a message counts them; after the
+move they get `workspace/didRenameFiles`. Roslyn declares it for .razor files
+only, so renaming a .cs file does not rename its type. With
+nvim-lsp-file-operations loaded, that plugin does this instead.
 
 ==============================================================================
 5. MAPPINGS                                         *dotnet-tree-mappings*
@@ -427,7 +438,9 @@ Files and folders (|dotnet-tree-file-operations|):
                          existing file (|dotnet-tree-solution-folders|)
   A                      add a folder
   n                      new .cs file from a template, in the namespace of
-                         its folder; on the solution, a new solution folder;
+                         its folder (the project's RootNamespace, then one
+                         part per folder); on the solution, a new solution
+                         folder;
                          on a solution folder, a new file in it or a
                          subfolder
   d                      delete; on a package, a project reference or a
