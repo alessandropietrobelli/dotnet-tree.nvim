@@ -25,6 +25,15 @@ mappings may land in a minor release; they will always be listed here.
   endings, and the BOM is kept
   ([#66](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/66)).
 
+- Files and folders are renamed (`<F2>`), moved (`m`), copied and pasted
+  (`y`, `x`, `p`) and deleted (`D`) from the tree, and `A` creates a folder.
+  `D` on a package, a project reference or a project removes it with `dotnet`,
+  and on a solution item takes it off its folder, leaving the file on disk; a
+  renamed or moved solution item keeps its place in the solution. Renames and
+  moves are sent to the language servers that ask for them
+  (`workspace/willRenameFiles`)
+  ([#50](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/50)).
+
 ### Changed
 
 - A `launchSettings.json` with comments or trailing commas, which `dotnet`

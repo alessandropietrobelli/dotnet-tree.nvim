@@ -361,8 +361,41 @@ refused.
 
 On a file listed in a solution folder, `n` and `a` act on that folder. A
 solution file with unsaved changes in a buffer is not written over: save or
-discard them first. Removing items and renaming or deleting folders are not
-done from the tree yet.
+discard them first. Renaming or deleting a solution folder is not done from
+the tree yet; its items are renamed, moved and taken off with the file
+operations below.
+
+                                              *dotnet-tree-file-operations*
+Files and folders are renamed, moved, copied and deleted from the tree, and
+what each key does depends on what the node stands for:
+
+  <F2>  rename        a file or folder of a project, or a solution item
+  m     move          the same; the prompt takes a path, and a directory
+                      keeps the name
+  y x p copy, cut,    `p` on a folder, a file (its folder) or a project
+        paste         (its directory)
+  A     new folder    in the same place `p` pastes to
+  D     delete        a file or folder of a project, after asking. On a
+                      package, a project reference or a project it runs
+                      `dotnet remove ... package`, `dotnet remove ...
+                      reference` or `dotnet sln remove`, after asking; the
+                      project's files stay on disk. On a solution item it
+                      takes the file off its solution folder and leaves the
+                      file where it is
+
+A renamed or moved solution item keeps its place in the solution: the new path
+is written in the solution file. The rest is refused with the reason: the
+solution, a solution folder, a project (whose file the solution and other
+projects point to), a project's own file, the groups (Packages, Dependencies)
+and what has no file of its own.
+
+The work on disk is neo-tree's own: open buffers follow a renamed file, and
+the events other plugins listen to are fired. Before a rename or a move, the
+language servers that declare `workspace/willRenameFiles` for that file are
+asked for their edits, which are applied; after it they get
+`workspace/didRenameFiles`. Roslyn declares it for .razor files only, so
+renaming a .cs file does not rename its type. With nvim-lsp-file-operations
+installed, that plugin does this instead.
 
 ==============================================================================
 5. MAPPINGS                                         *dotnet-tree-mappings*
@@ -392,6 +425,14 @@ Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
   d                      debug project        -> nvim-dap
   L                      choose the launch profile for r, d and w -> run
                          (|dotnet-tree-launch-profile|)
+  <F2>                   rename a file or folder
+  m                      move a file or folder
+  y / x / p              copy / cut / paste a file or folder
+  A                      new folder
+  D                      delete; on a package, a project reference or a
+                         project, remove it with dotnet; on a solution item,
+                         take it off its folder
+                         (|dotnet-tree-file-operations|)
   t                      test project         -> terminal
   w                      watch (run / test / build)  -> terminal
 

@@ -42,6 +42,10 @@ This source renders that graph.
   opened, and project rows carry the error and warning counts underneath them
 - **dotnet CLI actions** on the node under the cursor: build, clean, run, test, watch, add
   package / project reference, new file from template (with namespace inferred from the folder)
+- **File operations that know what a node is**: rename, move, copy and paste a project's files and
+  folders, create folders, delete — and `D` on a package, a project reference or a project removes
+  it with `dotnet`, while on a solution item it takes the file off its folder and leaves it on disk.
+  Renames and moves are announced to the language servers that ask for them
 - **Debug the project under the cursor** with `d`: it builds first, then starts netcoredbg
   through nvim-dap on that project's own assembly — no prompt asking which project, and no
   stale binary, because a failed build stops the launch and shows the compiler errors instead.
@@ -181,6 +185,11 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 | `r` | run project — in a terminal split |
 | `d` | debug project — builds first, then netcoredbg via nvim-dap |
 | `L` | choose the launch profile `r`, `d` and `w` → run use, when the project has several |
+| `<F2>` | rename a file or folder |
+| `m` | move a file or folder |
+| `y` / `x` / `p` | copy / cut / paste a file or folder |
+| `A` | new folder |
+| `D` | delete a file or folder; on a package, a project reference or a project, remove it with `dotnet`; on a solution item, take it off its folder |
 | `t` | test project — in a terminal split |
 | `w` | watch (run / test / build) — in a terminal split |
 
