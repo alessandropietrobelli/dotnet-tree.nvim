@@ -529,6 +529,23 @@ describe("debug.debug", function()
       vim.fn.delete(root, "rf")
     end)
 
+    -- #51: the profile chosen, not the first in the file
+    it("uses the launch profile it is given", function()
+      local root, project = scratch_project("Chosen", { "net9.0" })
+      with_profile(
+        root,
+        [[{ "profiles": {
+          "http": { "commandName": "Project", "applicationUrl": "http://localhost:5135" },
+          "https": { "commandName": "Project", "applicationUrl": "https://localhost:7135" }
+        } }]]
+      )
+      local recorded = with_stubs({}, function()
+        dbg.debug(project, { profile = "https" })
+      end)
+      assert.are.equal("https://localhost:7135", recorded.runs[1].env.ASPNETCORE_URLS)
+      vim.fn.delete(root, "rf")
+    end)
+
     it("launches in the workingDirectory the profile declares", function()
       local root, project = scratch_project("Cwd", { "net9.0" })
       vim.fn.mkdir(root .. "/content", "p")

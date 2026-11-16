@@ -9,6 +9,14 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+### Added
+
+- A project with several launch profiles asks which one `r`, `d` and `w` → run
+  use, the first time, and remembers the answer per project; `r` and `w` pass it
+  as `--launch-profile`. `L` on a project asks again. A project with one profile
+  or none starts as before, without a question
+  ([#51](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/51)).
+
 ### Fixed
 
 - `d` debugs a project whose `AssemblyName` is written as a property, such as

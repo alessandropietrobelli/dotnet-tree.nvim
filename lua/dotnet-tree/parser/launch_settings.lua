@@ -86,11 +86,10 @@ end
 --- back to alphabetical order, so the choice is deterministic either way.
 ---@param decoded table the whole decoded launchSettings.json
 ---@param raw string|nil the file's text, for recovering file order
----@return string|nil name
----@return table|nil profile
-function M.profile(decoded, raw)
+---@return {name: string, profile: table}[] profiles every usable one, first in the file first
+function M.ordered(decoded, raw)
   if type(decoded) ~= "table" or type(decoded.profiles) ~= "table" then
-    return nil, nil
+    return {}
   end
 
   local candidates = {}
@@ -100,10 +99,6 @@ function M.profile(decoded, raw)
       table.insert(candidates, { name = name, profile = profile, at = at })
     end
   end
-  if #candidates == 0 then
-    return nil, nil
-  end
-
   table.sort(candidates, function(a, b)
     if a.at and b.at and a.at ~= b.at then
       return a.at < b.at
@@ -113,8 +108,23 @@ function M.profile(decoded, raw)
     end
     return a.name < b.name
   end)
+  return candidates
+end
 
-  return candidates[1].name, candidates[1].profile
+--- The profile `dotnet run` picks without `--launch-profile`, or the one named
+--- `name`; see M.ordered for why the first is found the way it is.
+---@param decoded table the whole decoded launchSettings.json
+---@param raw string|nil the file's text, for recovering file order
+---@param name string|nil the profile to use instead of the first
+---@return string|nil name
+---@return table|nil profile
+function M.profile(decoded, raw, name)
+  for i, candidate in ipairs(M.ordered(decoded, raw)) do
+    if name == nil and i == 1 or candidate.name == name then
+      return candidate.name, candidate.profile
+    end
+  end
+  return nil, nil
 end
 
 --- What the profile declares, in the shape a dap launch configuration wants.
@@ -173,6 +183,33 @@ function M.settings(profile, dir)
   return settings
 end
 
+---@param dir string the project directory
+---@return table|nil decoded
+---@return string|nil raw
+local function load(dir)
+  local path = vim.fs.normalize(dir) .. "/Properties/launchSettings.json"
+  if vim.fn.filereadable(path) == 0 then
+    return nil, nil
+  end
+  local raw = table.concat(vim.fn.readfile(path), "\n")
+  local ok, decoded = pcall(vim.json.decode, raw)
+  if not ok then
+    return nil, nil
+  end
+  return decoded, raw
+end
+
+--- The names of a project's usable profiles (#51), first in the file first:
+--- those `r` and `d` can start, so the ones to choose from.
+---@param dir string the project directory
+---@return string[]
+function M.names(dir)
+  local decoded, raw = load(dir)
+  return vim.tbl_map(function(candidate)
+    return candidate.name
+  end, decoded and M.ordered(decoded, raw) or {})
+end
+
 --- Read the launch profile for a project, or nil when there is nothing usable.
 ---
 --- Under `pcall`, and not as caution for its own sake: `vim.json.decode`
@@ -181,21 +218,17 @@ end
 --- what having met them looks like. A file this cannot read leaves `d` exactly
 --- as it was.
 ---@param dir string the project directory
+---@param name string|nil the profile chosen (#51); nil for the one `dotnet run` picks by default
 ---@return table|nil settings { env, args, cwd }
 ---@return string|nil name the profile the settings came from
-function M.read(dir)
-  local path = vim.fs.normalize(dir) .. "/Properties/launchSettings.json"
-  if vim.fn.filereadable(path) == 0 then
+function M.read(dir, name)
+  local decoded, raw = load(dir)
+  if not decoded then
     return nil, nil
   end
 
-  local raw = table.concat(vim.fn.readfile(path), "\n")
-  local ok, decoded = pcall(vim.json.decode, raw)
-  if not ok then
-    return nil, nil
-  end
-
-  local name, profile = M.profile(decoded, raw)
+  local profile
+  name, profile = M.profile(decoded, raw, name)
   if not profile then
     return nil, nil
   end

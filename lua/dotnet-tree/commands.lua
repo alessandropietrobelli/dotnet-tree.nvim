@@ -452,8 +452,19 @@ function M.run_project(state)
   if not go then
     return
   end
-  local cmd = fn_app and fn_app.func and "func start" or "dotnet run --project " .. vim.fn.shellescape(path)
-  terminal.open(cmd, "run " .. terminal.project_name(path), project_dir(path))
+  -- `func start` runs the Functions host, which reads no launch profile
+  if fn_app and fn_app.func then
+    terminal.open("func start", "run " .. terminal.project_name(path), project_dir(path))
+    return
+  end
+  local launch_profile = require("dotnet-tree.launch_profile")
+  launch_profile.choose(path, function(profile)
+    terminal.open(
+      "dotnet run --project " .. vim.fn.shellescape(path) .. launch_profile.args(profile),
+      "run " .. terminal.project_name(path),
+      project_dir(path)
+    )
+  end)
 end
 
 function M.build_solution(state)
@@ -500,7 +511,20 @@ function M.debug(state)
     vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
     return
   end
-  require("dotnet-tree.debug").debug(node.extra.project.path)
+  local path = node.extra.project.path
+  -- Asked before the build, not after it
+  require("dotnet-tree.launch_profile").choose(path, function(profile)
+    require("dotnet-tree.debug").debug(path, { profile = profile })
+  end)
+end
+
+function M.choose_launch_profile(state)
+  local node = find_project_node(state)
+  if not node then
+    vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
+    return
+  end
+  require("dotnet-tree.launch_profile").pick(node.extra.project.path)
 end
 
 function M.watch(state)
@@ -514,14 +538,24 @@ function M.watch(state)
       return
     end
     local path = node.extra.project.path
-    if choice == "run" and not prepare_function_app(path, true) then
+    local function start(profile)
+      terminal.open(
+        "dotnet watch " .. choice .. " --project " .. vim.fn.shellescape(path) .. profile,
+        "watch " .. choice .. " " .. terminal.project_name(path),
+        project_dir(path)
+      )
+    end
+    if choice ~= "run" then
+      start("")
       return
     end
-    terminal.open(
-      "dotnet watch " .. choice .. " --project " .. vim.fn.shellescape(path),
-      "watch " .. choice .. " " .. terminal.project_name(path),
-      project_dir(path)
-    )
+    if not prepare_function_app(path, true) then
+      return
+    end
+    local launch_profile = require("dotnet-tree.launch_profile")
+    launch_profile.choose(path, function(profile)
+      start(launch_profile.args(profile))
+    end)
   end)
 end
 

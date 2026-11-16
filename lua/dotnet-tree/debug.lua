@@ -414,7 +414,7 @@ local function launch(dap, target, program, opts)
   -- What `dotnet run` would have used, so that `r` and `d` start the same
   -- project the same way. A project with no launchSettings.json, or one this
   -- cannot read, gets `nil` and the configuration below is what it always was.
-  local profile, profile_name = launch_settings.read(target.dir)
+  local profile, profile_name = launch_settings.read(target.dir, opts.profile)
   if profile_name then
     notify(("launch profile %q"):format(profile_name), vim.log.levels.INFO)
   end
@@ -459,6 +459,7 @@ end
 ---@param project_path string
 ---@param opts table|nil
 ---   build      boolean, default true: build before launching
+---   profile    string, the launch profile to use (#51); nil for the one `dotnet run` picks
 ---   on_launch  fun(program) called with the dll actually launched
 function M.debug(project_path, opts)
   opts = opts or {}

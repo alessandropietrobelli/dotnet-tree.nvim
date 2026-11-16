@@ -214,9 +214,17 @@ the other. Four things are taken from the profile:
   commandLineArgs       the arguments, split the way a shell would
   workingDirectory      where the process starts, relative to the project
 
-The profile is the one `dotnet run` would use with no `--launch-profile`: the
-first `commandName: Project` profile in the file. Docker and IIS Express
-profiles are skipped, because neither starts the assembly that was just built.
+Only `commandName: Project` profiles are used: Docker and IIS Express profiles
+are skipped, because neither starts the assembly that was just built. With one
+such profile, it is the one `dotnet run` uses with no `--launch-profile`, and
+nothing is asked.
+
+A project with several (a web project usually has `http` and `https`) asks
+which one the first time `r`, `d` or `w` → run starts it, with the first in
+the file, the one `dotnet run` picks by default, marked as such. The choice is
+remembered for that project across sessions, and `r` and `w` → run pass it to
+`dotnet` as `--launch-profile`. `L` on the project asks again. If the file no
+longer has the profile chosen, the question comes back.
 A project with no launchSettings.json, or one whose file cannot be parsed as
 strict JSON, is launched exactly as it was before — the file is a source of
 extra information, never a reason to refuse.
@@ -348,6 +356,8 @@ Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
   C                      clean solution       -> quickfix
   r                      run project          -> terminal
   d                      debug project        -> nvim-dap
+  L                      choose the launch profile for r, d and w -> run
+                         (|dotnet-tree-launch-profile|)
   t                      test project         -> terminal
   w                      watch (run / test / build)  -> terminal
 
