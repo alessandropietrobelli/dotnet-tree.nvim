@@ -285,11 +285,13 @@ describe("debug.resolve", function()
     assert.is_truthy(reason:find("only MSBuild can resolve", 1, true), reason)
   end)
 
-  it("refuses an AssemblyName it cannot evaluate rather than guessing the file name", function()
-    local target, reason = dbg.resolve(FIXTURES .. "/UnevaluatedName.csproj")
-    assert.is_nil(target)
-    assert.is_truthy(reason:find("$(ToolName)", 1, true), reason)
-    assert.is_truthy(reason:find("only MSBuild can resolve", 1, true), reason)
+  -- #35. MSBuild names the output through `TargetPath`, whatever the property
+  -- expands to; only the fallbacks for an old SDK needed the name.
+  it("lets an AssemblyName it cannot evaluate through, without guessing the file name", function()
+    local target = assert(dbg.resolve(FIXTURES .. "/UnevaluatedName.csproj"))
+    assert.is_nil(target.assembly_name)
+    assert.are.equal("$(ToolName)", target.unresolved_name)
+    assert.is_nil(target.dll_for("net9.0"))
   end)
 
   it("uses the declared AssemblyName for the output path, not the file name", function()
@@ -672,6 +674,63 @@ describe("debug.debug", function()
 
     assert.are.equal(1, #recorded.runs)
     assert.are.equal(root .. "/bin/Debug/net9.0/OldSdk.dll", recorded.runs[1].program)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- #35: the file is named by a property only MSBuild expands
+  local function property_named_project()
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    local project = root .. "/Tool.csproj"
+    local handle = assert(io.open(project, "w"))
+    handle:write([[
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ToolName>dotnet-probe</ToolName>
+    <AssemblyName>$(ToolName)</AssemblyName>
+  </PropertyGroup>
+</Project>
+]])
+    handle:close()
+    return root, project
+  end
+
+  it("launches the assembly MSBuild names for an AssemblyName written as a property", function()
+    local root, project = property_named_project()
+    local dll = write_assembly(root .. "/bin/Debug/net9.0/dotnet-probe.dll")
+
+    local recorded = with_stubs({
+      msbuild = function(cmd)
+        return answer(cmd, { TargetPath = dll })
+      end,
+    }, function()
+      dbg.debug(project)
+    end)
+
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal(dll, recorded.runs[1].program)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- Without `-getProperty` nothing can name the file: say so rather than guess
+  -- `Tool.dll` or whatever bin/ happens to hold.
+  it("says why when an SDK too old to answer meets an AssemblyName written as a property", function()
+    local root, project = property_named_project()
+    write_assembly(root .. "/bin/Debug/net9.0/dotnet-probe.dll")
+
+    local messages
+    local recorded = with_stubs({ msbuild = msbuild_too_old }, function()
+      messages = capture_notifications(function()
+        dbg.debug(project)
+      end)
+    end)
+
+    assert.are.equal(0, #recorded.runs)
+    local text = joined(messages)
+    assert.is_truthy(text:find("$(ToolName)", 1, true), text)
+    assert.is_truthy(text:find("SDK 8", 1, true), text)
     vim.fn.delete(root, "rf")
   end)
 

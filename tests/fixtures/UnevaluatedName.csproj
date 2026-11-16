@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Runnable, but the output file name is an MSBuild property reference.
-       Reading XML cannot resolve it, so the dll path cannot be composed. -->
+       Reading XML cannot resolve it, so only MSBuild can name the dll. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>

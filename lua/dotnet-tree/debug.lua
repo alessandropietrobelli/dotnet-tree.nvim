@@ -205,7 +205,9 @@ end
 --- library *before* spending a build on it.
 ---
 ---@param project_path string path to a .csproj/.fsproj/.vbproj
----@return table|nil target { path, dir, assembly_name, is_test_project, frameworks, dll_for }
+---@return table|nil target { path, dir, assembly_name, unresolved_name, is_test_project, frameworks,
+---   dll_for }: `assembly_name` is nil, and `dll_for` returns nil, when the project writes it as a
+---   property (`unresolved_name`), which only MSBuild can expand
 ---@return string|nil reason why the project cannot be launched
 function M.resolve(project_path)
   local project = csproj.parse(project_path)
@@ -257,25 +259,31 @@ function M.resolve(project_path)
     return nil, ("%s is a Blazor WebAssembly app: it runs in the browser, and netcoredbg cannot launch it"):format(name)
   end
 
+  -- An AssemblyName written as a property is not a reason to refuse (#35): the
+  -- path comes from MSBuild's `TargetPath`, which names the file whatever the
+  -- property expands to. Only the fallbacks for an SDK older than 8 -- composing
+  -- the path, reading bin/ -- need the name, so it is left unknown for them.
   local assembly_name = project.assembly_name
-  if is_unevaluated(assembly_name) then
-    return nil,
-      ("%s declares AssemblyName as %s, which only MSBuild can resolve; no output path can be built"):format(
-        name,
-        assembly_name
-      )
+  local unresolved_name = is_unevaluated(assembly_name) and assembly_name or nil
+  if unresolved_name then
+    assembly_name = nil
+  else
+    -- MSBuild's default: the project file's own name.
+    assembly_name = assembly_name or vim.fn.fnamemodify(project_path, ":t:r")
   end
-  -- MSBuild's default: the project file's own name.
-  assembly_name = assembly_name or vim.fn.fnamemodify(project_path, ":t:r")
 
   local dir = project.dir
   return {
     path = project_path,
     dir = dir,
     assembly_name = assembly_name,
+    unresolved_name = unresolved_name,
     is_test_project = project.is_test_project,
     frameworks = vim.deepcopy(project.target_frameworks),
     dll_for = function(tfm)
+      if not assembly_name then
+        return nil
+      end
       return ("%s/bin/%s/%s/%s.dll"):format(dir, M.configuration, tfm, assembly_name)
     end,
   }
@@ -298,7 +306,11 @@ function M.frameworks(target)
     return target.frameworks
   end
 
+  -- Reading bin/ means knowing the file name to look for
   local found = {}
+  if not target.assembly_name then
+    return found
+  end
   local bin = ("%s/bin/%s"):format(target.dir, M.configuration)
   for name, kind in vim.fs.dir(bin) do
     if kind == "directory" and vim.fn.filereadable(("%s/%s/%s.dll"):format(bin, name, target.assembly_name)) == 1 then
@@ -445,6 +457,19 @@ function M.debug(project_path, opts)
     end)
   end
 
+  -- MSBuild had no answer, and the project's AssemblyName is a property only
+  -- MSBuild can expand: nothing names the assembly. That happens on an SDK
+  -- older than 8, which does not know `-getProperty`.
+  local function unnamed()
+    notify(
+      ("%s declares AssemblyName as %s, and MSBuild did not name the output: that needs SDK 8 or later"):format(
+        vim.fn.fnamemodify(target.path, ":t"),
+        target.unresolved_name
+      ),
+      vim.log.levels.ERROR
+    )
+  end
+
   -- Ask MSBuild where the build put the assembly, and fall back to the default
   -- layout when it cannot answer -- an SDK older than 8 does not know
   -- `-getProperty`. The composed path is a guess about the layout; the answer
@@ -455,7 +480,12 @@ function M.debug(project_path, opts)
       -- the path the build was configured to produce, so it is also the right
       -- path to name in the message if it is missing. The composed one is only
       -- for an SDK that cannot answer.
-      launch(dap, target, from_msbuild or target.dll_for(tfm), opts)
+      local program = from_msbuild or target.dll_for(tfm)
+      if not program then
+        unnamed()
+        return
+      end
+      launch(dap, target, program, opts)
     end)
   end
 
@@ -486,6 +516,10 @@ function M.debug(project_path, opts)
         -- build left under bin/<configuration>/.
         if #built == 0 then
           built = M.frameworks(target)
+        end
+        if #built == 0 and target.unresolved_name then
+          unnamed()
+          return
         end
         if #built == 0 then
           notify(
