@@ -9,6 +9,15 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `d` debugs a project whose `AssemblyName` is written as a property, such as
+  `$(ToolName)`, instead of refusing it. MSBuild names the assembly whatever the
+  property expands to. When MSBuild cannot be asked, as on an SDK older than 8,
+  `d` stops after the build and says why, quoting MSBuild's error when it
+  failed for another reason
+  ([#35](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/35)).
+
 ## [0.3.2] - 2026-11-08
 
 ### Fixed

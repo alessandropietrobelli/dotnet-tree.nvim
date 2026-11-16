@@ -192,9 +192,13 @@ sets <ArtifactsPath> puts every project under one artifacts/ tree and has no
 <project>/bin at all; <OutputPath>, <BaseOutputPath> and
 <AppendTargetFrameworkToOutputPath> each move it somewhere else again. One
 query answers for all of them, and it costs a fraction of the build that runs
-just before it. `-getProperty` needs the .NET 8 SDK or newer; on an older SDK
+just before it, also when <AssemblyName> is written as a property such as
+`$(ToolName)`. `-getProperty` needs the .NET 8 SDK or newer; on an older SDK
 the default layout is composed as it was before, which is no loss because the
-artifacts layout is itself .NET 8 and later.
+artifacts layout is itself .NET 8 and later. The exception is an AssemblyName
+written as a property: only MSBuild can expand it, so there `d` stops after
+the build and says why. When MSBuild fails to answer on a newer SDK, the
+message quotes its error.
 
                                                   *dotnet-tree-launch-profile*
 The launch profile is read too. `Properties/launchSettings.json` is what makes
@@ -234,7 +238,10 @@ What `d` refuses, and why it says so instead of launching:
                             instead says nothing about the real problem
   OutputType `$(Property)`  only MSBuild can resolve it, and guessing "Exe"
                             produces exactly that opaque error
-  AssemblyName `$(...)`     the output path cannot be composed from it
+  AssemblyName `$(...)`     only when MSBuild cannot name the output, as
+                            on an SDK older than 8: the path cannot be
+                            composed from it. From SDK 8 on, MSBuild names
+                            the file
   a Blazor WebAssembly app  MSBuild calls it an Exe, but it runs in the
                             browser; netcoredbg cannot start it
   a failed build            the quickfix list stays on screen with the

@@ -285,11 +285,13 @@ describe("debug.resolve", function()
     assert.is_truthy(reason:find("only MSBuild can resolve", 1, true), reason)
   end)
 
-  it("refuses an AssemblyName it cannot evaluate rather than guessing the file name", function()
-    local target, reason = dbg.resolve(FIXTURES .. "/UnevaluatedName.csproj")
-    assert.is_nil(target)
-    assert.is_truthy(reason:find("$(ToolName)", 1, true), reason)
-    assert.is_truthy(reason:find("only MSBuild can resolve", 1, true), reason)
+  -- #35. MSBuild names the output through `TargetPath`, whatever the property
+  -- expands to; only the fallbacks for an old SDK need the name.
+  it("lets an AssemblyName it cannot evaluate through, without guessing the file name", function()
+    local target = assert(dbg.resolve(FIXTURES .. "/UnevaluatedName.csproj"))
+    assert.is_nil(target.assembly_name)
+    assert.are.equal("$(ToolName)", target.unresolved_name)
+    assert.is_nil(target.dll_for("net9.0"))
   end)
 
   it("uses the declared AssemblyName for the output path, not the file name", function()
@@ -335,6 +337,34 @@ describe("debug.parse_property", function()
   end)
 end)
 
+-- #35: why there is no value, said to the user. An old SDK is only one reason.
+describe("debug.property_failure", function()
+  it("blames the SDK only when MSBuild does not know the switch", function()
+    assert.matches("SDK 8", dbg.property_failure(1, { "MSBUILD : error MSB1001: Unknown switch." }))
+  end)
+
+  it("quotes the error of a project that fails to evaluate", function()
+    local why = dbg.property_failure(1, {
+      "  Determining projects to restore...",
+      "/src/Tool.csproj : error MSB4019: The imported project was not found.",
+    })
+    assert.are.equal(
+      "MSBuild failed (exit 1): /src/Tool.csproj : error MSB4019: The imported project was not found.",
+      why
+    )
+    assert.are.equal("MSBuild failed (exit 2)", dbg.property_failure(2, {}))
+  end)
+
+  it("tells extra output and a dotnet that did not start apart from an empty answer", function()
+    assert.are.equal(
+      "MSBuild printed more than the value: warning NU1900: offline",
+      dbg.property_failure(0, { "warning NU1900: offline", "/tmp/Api.dll" })
+    )
+    assert.are.equal("dotnet could not be started", dbg.property_failure(-1, {}))
+    assert.is_nil(dbg.property_failure(0, {}))
+  end)
+end)
+
 describe("debug.frameworks", function()
   before_each(function()
     csproj.invalidate()
@@ -348,6 +378,28 @@ describe("debug.frameworks", function()
     local target = assert(dbg.resolve(project))
     assert.are.same({}, target.frameworks)
     assert.are.same({ "net9.0" }, dbg.frameworks(target))
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- #35: bin/ holds a `Tool.dll` named after the project file, and the real
+  -- assembly under a name only MSBuild knows. Neither is to be guessed from.
+  it("does not look in bin/ when the assembly name is a property", function()
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    local project = root .. "/Tool.csproj"
+    vim.fn.writefile({
+      '<Project Sdk="Microsoft.NET.Sdk">',
+      "  <PropertyGroup>",
+      "    <OutputType>Exe</OutputType>",
+      "    <AssemblyName>$(ToolName)</AssemblyName>",
+      "  </PropertyGroup>",
+      "</Project>",
+    }, project)
+    for _, dll in ipairs({ "net9.0/Tool.dll", "net9.0/dotnet-probe.dll", "net8.0/Whatever.dll" }) do
+      vim.fn.mkdir(root .. "/bin/Debug/" .. vim.fn.fnamemodify(dll, ":h"), "p")
+      vim.fn.writefile({ "not really an assembly" }, root .. "/bin/Debug/" .. dll)
+    end
+    assert.are.same({}, dbg.frameworks(assert(dbg.resolve(project))))
     vim.fn.delete(root, "rf")
   end)
 
@@ -672,6 +724,138 @@ describe("debug.debug", function()
 
     assert.are.equal(1, #recorded.runs)
     assert.are.equal(root .. "/bin/Debug/net9.0/OldSdk.dll", recorded.runs[1].program)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- #35: the file is named by a property only MSBuild expands
+  -- `frameworks` is the line naming them, e.g. "<TargetFramework>net9.0</TargetFramework>".
+  -- A `Tool.dll`, named after the project file, waits in bin/ as a trap: it is
+  -- never the assembly, and launching it would be the old guess.
+  local function property_named_project(frameworks)
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    local project = root .. "/Tool.csproj"
+    local handle = assert(io.open(project, "w"))
+    handle:write(([[
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    %s
+    <ToolName>dotnet-probe</ToolName>
+    <AssemblyName>$(ToolName)</AssemblyName>
+  </PropertyGroup>
+</Project>
+]]):format(frameworks or "<TargetFramework>net9.0</TargetFramework>"))
+    handle:close()
+    write_assembly(root .. "/bin/Debug/net9.0/Tool.dll")
+    return root, project
+  end
+
+  it("launches the assembly MSBuild names for an AssemblyName written as a property", function()
+    local root, project = property_named_project()
+    local dll = write_assembly(root .. "/bin/Debug/net9.0/dotnet-probe.dll")
+
+    local recorded = with_stubs({
+      msbuild = function(cmd)
+        return answer(cmd, { TargetPath = dll })
+      end,
+    }, function()
+      dbg.debug(project)
+    end)
+
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal(dll, recorded.runs[1].program)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- Without `-getProperty` nothing can name the file: say so rather than guess
+  -- `Tool.dll` or whatever bin/ happens to hold.
+  it("says why when an SDK too old to answer meets an AssemblyName written as a property", function()
+    local root, project = property_named_project()
+    write_assembly(root .. "/bin/Debug/net9.0/dotnet-probe.dll")
+
+    local messages
+    local recorded = with_stubs({ msbuild = msbuild_too_old }, function()
+      messages = capture_notifications(function()
+        dbg.debug(project)
+      end)
+    end)
+
+    assert.are.equal(0, #recorded.runs)
+    local text = joined(messages)
+    assert.is_truthy(text:find("$(ToolName)", 1, true), text)
+    assert.is_truthy(text:find("SDK 8", 1, true), text)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- The only way into the check after `TargetFrameworks`: nothing declared, so
+  -- the frameworks come from MSBuild or bin/, and neither can answer here.
+  it("says why on an old SDK when the framework is not declared either", function()
+    local root, project = property_named_project("<TargetFramework>$(DefaultTfm)</TargetFramework>")
+    write_assembly(root .. "/bin/Debug/net9.0/dotnet-probe.dll")
+
+    local messages
+    local recorded = with_stubs({ msbuild = msbuild_too_old }, function()
+      messages = capture_notifications(function()
+        dbg.debug(project)
+      end)
+    end)
+
+    assert.are.equal(0, #recorded.runs)
+    local text = joined(messages)
+    assert.is_truthy(text:find("$(ToolName)", 1, true), text)
+    assert.is_truthy(text:find("SDK 8", 1, true), text)
+    assert.is_nil(text:find("cannot tell", 1, true), text)
+    vim.fn.delete(root, "rf")
+  end)
+
+  -- On SDK 8 and later a failed evaluation also gives no value: the message has
+  -- to carry MSBuild's error, not send the reader to upgrade an SDK they have.
+  it("names MSBuild's error, not the SDK, when an up-to-date SDK fails to evaluate", function()
+    local root, project = property_named_project()
+
+    local messages
+    local recorded = with_stubs({
+      msbuild = function()
+        return 1, { 'Tool.csproj : error MSB4019: The imported project "Missing.props" was not found.' }
+      end,
+    }, function()
+      messages = capture_notifications(function()
+        dbg.debug(project)
+      end)
+    end)
+
+    assert.are.equal(0, #recorded.runs)
+    local text = joined(messages)
+    assert.is_truthy(text:find("MSB4019", 1, true), text)
+    assert.is_nil(text:find("SDK 8", 1, true), text)
+    vim.fn.delete(root, "rf")
+  end)
+
+  it("launches the framework chosen for a multi-targeted project named by a property", function()
+    local root, project = property_named_project("<TargetFrameworks>net8.0;net9.0</TargetFrameworks>")
+    local net8 = write_assembly(root .. "/bin/Debug/net8.0/dotnet-probe.dll")
+    local net9 = write_assembly(root .. "/bin/Debug/net9.0/dotnet-probe.dll")
+
+    local offered
+    local previous_select = vim.ui.select
+    vim.ui.select = function(items, _, on_choice)
+      offered = items
+      on_choice("net9.0")
+    end
+    local recorded = with_stubs({
+      msbuild = function(cmd)
+        return answer(cmd, { ["TargetPath:net8.0"] = net8, ["TargetPath:net9.0"] = net9 })
+      end,
+    }, function()
+      dbg.debug(project)
+    end)
+    vim.ui.select = previous_select
+
+    assert.are.same({ "net8.0", "net9.0" }, offered)
+    assert.are.equal(1, #recorded.runs)
+    assert.are.equal(net9, recorded.runs[1].program)
+    assert.is_truthy(vim.tbl_contains(recorded.queries[#recorded.queries], "-p:TargetFramework=net9.0"))
     vim.fn.delete(root, "rf")
   end)
 
