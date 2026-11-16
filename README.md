@@ -41,24 +41,30 @@ This source renders that graph.
   `dotnet_analyzer_diagnostics_scope = "fullSolution"`), markers appear on files you have not
   opened, and project rows carry the error and warning counts underneath them
 - **dotnet CLI actions** on the node under the cursor: build, clean, run, test, watch, add
-  package / project reference, new file from template (with namespace inferred from the folder)
-- **Debug the project under the cursor** with `d`: it builds first, then starts netcoredbg
+  package / project reference, new file from template (in the namespace of its folder, from the
+  project's `RootNamespace`)
+- **File operations on neo-tree's own keys, that know what a node is**: add files of any kind and
+  folders, rename, move, copy and paste a project's files and folders, delete — and `d` on a
+  package, a project reference or a project removes it with `dotnet`, while on a solution item it
+  takes the file off its folder and leaves it on disk. Renames and moves are announced to the
+  language servers that ask for them
+- **Debug the project under the cursor** with `,d`: it builds first, then starts netcoredbg
   through nvim-dap on that project's own assembly — no prompt asking which project, and no
   stale binary, because a failed build stops the launch and shows the compiler errors instead.
   The launch profile in `Properties/launchSettings.json` is read, so a web project is debugged
   in Development on the port the profile names rather than in Production on port 5000. With
-  several profiles (`http`, `https`, …), `r`, `d` and `w` → run ask which one once per project,
-  and `L` changes it
+  several profiles (`http`, `https`, …), `,r`, `,d` and `,w` → run ask which one once per project,
+  and `,l` changes it
 - **Build errors in the quickfix list**, deduplicated and jumpable — including the ones no
   language server can see, such as a failed restore, which stops compilation before any
   compiler error is reported. `run`, `test` and `watch` stay in a terminal, where their
   output is interactive, started in the project's folder. Each one is labelled in its own winbar with what it runs (`run Api`,
   `watch test Api.Tests`), and stays out of a bufferline, so clicking a tab never opens a
   terminal in the editor window
-- **Azure Functions apps** run with `r` like any other project: `dotnet run` on the isolated
+- **Azure Functions apps** run with `,r` like any other project: `dotnet run` on the isolated
   worker SDK 2.x, `func start` on an in-process app or worker SDK 1.x, with a warning when the
   app uses `UseDevelopmentStorage=true` and Azurite is not running
-- **Multiple solutions** — pick one with `s`; the choice is remembered per working directory
+- **Multiple solutions** — pick one with `,s`; the choice is remembered per working directory
   in `stdpath("state")/dotnet-tree/solutions.json`
 - **Follow the current file** — `:Neotree dotnet-tree reveal` puts the cursor on the file you
   are editing, expanding the project and folders above it, and `follow_current_file` does it
@@ -69,10 +75,10 @@ This source renders that graph.
   adds it, and git status is read in the background, also after a commit or checkout done
   outside Neovim
 - **Works with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim)** when it is
-  installed: `a` on a project's Packages opens its window to search and install, with that
+  installed: `,a` or `a` on a project's Packages opens its window to search and install, with that
   project picked; `a` on a package opens it on that package — versions per project, updates,
-  advisories. The tree reloads after nuget.nvim changes packages. Without it, `a` asks for a
-  package name as before
+  advisories. The tree reloads after nuget.nvim changes packages. Without it, a package name is
+  asked for
 
 ## Requirements
 
@@ -81,13 +87,13 @@ This source renders that graph.
   source, not a standalone tree
 - The `dotnet` CLI on your `PATH` (only needed for the build/run/test/watch/add actions)
 
-Optional, and only for `d` (debug project):
+Optional, and only for `,d` (debug project):
 
 - [nvim-dap](https://github.com/mfussenegger/nvim-dap)
 - [netcoredbg](https://github.com/Samsung/netcoredbg) on your `PATH`, or installed with
   mason (`:MasonInstall netcoredbg`)
 
-Without them the tree works exactly as before; `d` says what is missing, and
+Without them the tree works exactly as before; `,d` says what is missing, and
 `:checkhealth dotnet-tree` names it.
 
 ## Installation
@@ -163,7 +169,10 @@ directory contains a solution, and a winbar lets you flip back to files:
 
 ## Mappings
 
-Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
+Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim. Files and folders use
+neo-tree's own keys, the same as in its filesystem source; the .NET actions are under `,`, which
+neo-tree does not use. neo-tree's other defaults (`s` / `S` / `t` to open in a split or a tab,
+`P` preview, `q` close…) work as everywhere else.
 
 | Key | Action |
 |---|---|
@@ -172,30 +181,55 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 | `R` | refresh tree |
 | `z` / `Z` | close all / expand all |
 | `?` | show help |
-| `s` | select solution (when the repo has more than one) |
-| `e` | edit the project's `.csproj` |
-| `a` | add package or project reference — with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim) installed, packages open its window. On a solution folder: add an existing file to it |
-| `n` | new file from template. On the solution: new solution folder; on a solution folder: new file in it, or a subfolder |
-| `b` / `B` | build project / build solution — to the quickfix list |
-| `c` / `C` | clean project / clean solution — to the quickfix list |
-| `r` | run project — in a terminal split |
-| `d` | debug project — builds first, then netcoredbg via nvim-dap |
-| `L` | choose the launch profile `r`, `d` and `w` → run use, when the project has several |
-| `t` | test project — in a terminal split |
-| `w` | watch (run / test / build) — in a terminal split |
+| **Files and folders** | |
+| `a` | add a file of any kind, or a folder when the name ends in `/`. On Packages or Projects: add one, as `,a`. On a solution folder: add an existing file to it |
+| `A` | add a folder |
+| `n` | new `.cs` file from a template, in the folder's namespace. On the solution: new solution folder; on a solution folder: new file in it, or a subfolder |
+| `d` | delete. On a package, a project reference or a project: remove it with `dotnet`. On a solution item: take it off its folder |
+| `r` / `b` | rename / rename keeping the extension |
+| `m` / `c` | move / copy to a path |
+| `y` / `x` / `p` | copy / cut / paste |
 
-`r`, `t` and `w` start in the project's folder, not in Neovim's working directory, so an
+`d`, `y` and `x` also take a selection, as long as it holds only files and folders of projects:
+packages, references, projects and solution items go one at a time.
+| **.NET** | |
+| `,s` | select solution (when the repo has more than one) |
+| `,e` | edit the project's `.csproj` |
+| `,a` | add a package or a project reference — with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim) installed, packages open its window |
+| `,b` / `,B` | build project / build solution — to the quickfix list |
+| `,c` / `,C` | clean project / clean solution — to the quickfix list |
+| `,r` | run project — in a terminal split |
+| `,d` | debug project — builds first, then netcoredbg via nvim-dap |
+| `,t` | test project — in a terminal split |
+| `,w` | watch (run / test / build) — in a terminal split |
+| `,l` | choose the launch profile `,r`, `,d` and `,w` → run use, when the project has several |
+
+To keep the keys of 0.3 and earlier, map them back in your `opts`:
+
+```lua
+["dotnet-tree"] = {
+  window = {
+    mappings = {
+      s = "select_solution", e = "edit_project_file", a = "add_package_or_reference",
+      b = "build", B = "build_solution", c = "clean", C = "clean_solution",
+      r = "run_project", d = "debug", t = "test", w = "watch",
+    },
+  },
+},
+```
+
+`,r`, `,t` and `,w` start in the project's folder, not in Neovim's working directory, so an
 ASP.NET Core app finds its `appsettings.json` wherever Neovim was opened. An Azure Functions
 app (its `.csproj` sets `<AzureFunctionsVersion>`, references `Microsoft.NET.Sdk.Functions` or
 `Microsoft.Azure.Functions.Worker.Sdk`, or its folder has a `host.json`) needs
 [Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
-(`func`) on `PATH`: `r` runs `dotnet run` on `Microsoft.Azure.Functions.Worker.Sdk` 2.x, which
-starts the host itself, and `func start` on an in-process app or Worker SDK 1.x, which `w` →
+(`func`) on `PATH`: `,r` runs `dotnet run` on `Microsoft.Azure.Functions.Worker.Sdk` 2.x, which
+starts the host itself, and `func start` on an in-process app or Worker SDK 1.x, which `,w` →
 run cannot start and refuses. When `local.settings.json` sets
-`"AzureWebJobsStorage": "UseDevelopmentStorage=true"`, `r` and `w` → run check that Azurite is
+`"AzureWebJobsStorage": "UseDevelopmentStorage=true"`, `,r` and `,w` → run check that Azurite is
 listening on `127.0.0.1:10000` and warn if it is not; the app starts anyway.
 
-`d` resolves the project's own output — `OutputType` decides whether there is anything to
+`,d` resolves the project's own output — `OutputType` decides whether there is anything to
 launch, and when the project does not declare one its SDK does (`Microsoft.NET.Sdk.Web` and
 `Microsoft.NET.Sdk.Worker` build applications, which is why an ASP.NET Core project has no
 `<OutputType>` in it) — builds it, and then asks MSBuild where the build put the assembly
@@ -205,7 +239,7 @@ leaves no `bin/` at all, and `<OutputPath>`, `<BaseOutputPath>` and
 `<AppendTargetFrameworkToOutputPath>` each move it somewhere else again. MSBuild is the only
 thing that knows, also when `<AssemblyName>` is written as a property such as `$(ToolName)`.
 `-getProperty` needs the .NET 8 SDK or newer; on an older one the default layout is composed as
-before, which an `AssemblyName` written as a property makes impossible: `d` then stops after the
+before, which an `AssemblyName` written as a property makes impossible: `,d` then stops after the
 build and says why, and when MSBuild fails on a newer SDK the message quotes its error. A library
 is refused with the reason rather than launched; a multi-targeted project asks which framework;
 a failed build leaves the quickfix list on screen and never starts the debugger. A Blazor
@@ -220,7 +254,7 @@ asked instead, and a single-targeted project needs no framework at all for that:
 one output directly.
 
 A test project is a runnable assembly too — xunit v3 test projects declare
-`<OutputType>Exe</OutputType>` — so `d` debugs one rather than refusing it, and says that
+`<OutputType>Exe</OutputType>` — so `,d` debugs one rather than refusing it, and says that
 is what it is before launching: what you get is the whole test suite under the debugger.
 A project counts as a test project when it declares `<IsTestProject>` or references
 `Microsoft.NET.Test.Sdk`. To debug a single test rather than the whole assembly, use
@@ -272,7 +306,7 @@ an editor command** — neo-tree is being lazy-loaded, so neither plugin is on t
 yet. Set `lazy = false` on the neo-tree spec as shown in [Installation](#installation).
 
 **`no .sln/.slnx found under <path>`** — the source looks for a solution under the current working
-directory. Open Neovim at the repository root, or press `s` to pick one explicitly.
+directory. Open Neovim at the repository root, or press `,s` to pick one explicitly.
 
 **Only one file in the whole tree shows a diagnostic marker** — the solution has not been restored,
 so the language server cannot load the project graph and only reports on the file you have open.

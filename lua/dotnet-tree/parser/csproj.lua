@@ -13,25 +13,8 @@ function M.invalidate(path)
   end
 end
 
--- An MSBuild property is whatever the last unconditional assignment says. A
--- `Condition` we cannot evaluate is skipped rather than guessed at, so a
--- property declared only conditionally reads as nil -- unknown -- and the
--- caller decides what to do about it. The value itself is returned as written:
--- a `$(Property)` reference is not expanded here, same as everywhere else in
--- this parser.
-local function read_property(root, name)
-  local value = nil
-  for _, group in ipairs(xml.find_all(root, "PropertyGroup")) do
-    if xml.attr_ci(group.attrs, "Condition") == nil then
-      for _, node in ipairs(group.children) do
-        if node.tag == name and xml.attr_ci(node.attrs, "Condition") == nil and node.text ~= "" then
-          value = node.text
-        end
-      end
-    end
-  end
-  return value
-end
+-- See props.property: the last unconditional assignment, as written
+local read_property = props.property
 
 -- MSBuild booleans are the strings "true" and "false", compared without regard
 -- to case. Anything else -- an unevaluated property, a typo -- is not a
@@ -140,7 +123,11 @@ function M.parse(csproj_path)
   -- and one that chains upward (#30) makes the file above it load-bearing as
   -- well. `props_stamp` covers the whole chain, which one path and one mtime
   -- could not.
-  local inherited, props_stamp = props.inherited_frameworks(dir)
+  local inherited, frameworks_stamp = props.inherited_frameworks(dir)
+  -- RootNamespace can come from further up the chain than the frameworks do,
+  -- so the files it was read from count for the cache as well
+  local inherited_namespace, namespace_stamp = props.inherited_root_namespace(dir)
+  local props_stamp = (frameworks_stamp or "") .. "#" .. namespace_stamp
 
   local cached = cache[csproj_path]
   if cached and cached.mtime == mtime and cached.props_stamp == props_stamp then
@@ -187,6 +174,10 @@ function M.parse(csproj_path)
   -- basename, and the caller is the one that knows which it is looking at.
   result.output_type = read_property(root, "OutputType")
   result.assembly_name = read_property(root, "AssemblyName")
+  -- The root namespace `n` builds a new file's namespace from: the project's
+  -- own `<RootNamespace>`, else the one the Directory.Build.props chain sets,
+  -- as written (dotnet-tree.namespace expands what it can)
+  result.root_namespace = read_property(root, "RootNamespace") or inherited_namespace
 
   -- The SDK is what makes `output_type == nil` readable: nil means "the project
   -- did not say", and only the SDK says what that amounts to.

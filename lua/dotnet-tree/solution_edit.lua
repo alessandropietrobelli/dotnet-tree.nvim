@@ -508,6 +508,133 @@ function M.add_folder(sln_path, parent, name, siblings)
   end)
 end
 
+-- ─── items already listed ──────────────────────────────────────────────────
+
+-- The line of `content` holding position `pos`: its start, and the position
+-- after its line break (or the end of the file)
+local function line_bounds(content, pos)
+  local s = line_start(content, pos)
+  local nl = content:find("\n", pos, true)
+  return s, nl and (nl + 1) or (#content + 1)
+end
+
+-- Whether `rel`, as the solution file writes it, names `path`
+local function writes_path(sln_dir, rel, path)
+  return vim.fs.normalize(sln_dir .. "/" .. rel:gsub("\\", "/")) == vim.fs.normalize(path)
+end
+
+-- Where the item `path` of `folder` is written: the bounds of its line or tag,
+-- and the text of the path as written. `replace` gives what to put there.
+local function sln_find_item(content, folder, sln_dir, path)
+  local eol = eol_of(content)
+  local _, s, nl = sln_find_project(content, folder.guid, eol)
+  if not s then
+    return nil
+  end
+  local block_end = sln_end_project(content, nl - 1) or #content
+  local section = content:find("ProjectSection(SolutionItems)", nl, true)
+  if not section or section > block_end then
+    return nil
+  end
+  local close = content:find("EndProjectSection", section, true) or block_end
+  local pos = content:find("\n", section, true)
+  while pos and pos < close do
+    local ls, le = line_bounds(content, pos + 1)
+    if ls >= close then
+      break
+    end
+    local line = content:sub(ls, le - 1):gsub("\n$", "")
+    local rel = line:match("^%s*(.-)%s*=")
+    if rel and rel ~= "" and writes_path(sln_dir, rel, path) then
+      return ls, le, line
+    end
+    pos = le - 1
+  end
+end
+
+local function slnx_find_item(content, folder, sln_dir, path)
+  local xml = require("dotnet-tree.parser.xml")
+  local s, e, selfclosing, close = slnx_find_folder(content, folder._folderpath)
+  if not s or selfclosing then
+    return nil
+  end
+  local pos = e + 1
+  while true do
+    local ts, te, attrs = content:find("<[Ff]ile(%s[^>]-)/?>", pos)
+    if not ts or ts > close then
+      return nil
+    end
+    local rel = xml.attr_ci(xml.parse_attrs(attrs), "Path")
+    if rel and writes_path(sln_dir, rel, path) then
+      return ts, te
+    end
+    pos = te + 1
+  end
+end
+
+--- Take the file `path` off the solution folder `folder`. The file itself stays.
+---@param sln_path string
+---@param folder table
+---@param path string the item's path, as the parser gives it
+---@return boolean|nil ok
+---@return string|nil err
+function M.remove_item(sln_path, folder, path)
+  local sln_dir = vim.fn.fnamemodify(sln_path, ":h")
+  local missing = ("%s is not listed in %s"):format(vim.fn.fnamemodify(path, ":t"), folder.name)
+  return edit(sln_path, function(content)
+    if is_slnx(sln_path) then
+      local ts, te = slnx_find_item(content, folder, sln_dir, path)
+      if not ts then
+        return nil, missing
+      end
+      if starts_line(content, ts) and content:sub(te + 1):match("^%s*\n") then
+        local ls = line_start(content, ts)
+        local _, le = line_bounds(content, te)
+        return content:sub(1, ls - 1) .. content:sub(le)
+      end
+      return content:sub(1, ts - 1) .. content:sub(te + 1)
+    end
+    local ls, le = sln_find_item(content, folder, sln_dir, path)
+    if not ls then
+      return nil, missing
+    end
+    return content:sub(1, ls - 1) .. content:sub(le)
+  end)
+end
+
+--- Write `new_path` where the solution folder `folder` lists `old_path`, after
+--- the file was renamed or moved.
+---@param sln_path string
+---@param folder table
+---@param old_path string the item's path, as the parser gives it
+---@param new_path string
+---@return boolean|nil ok
+---@return string|nil err
+function M.rename_item(sln_path, folder, old_path, new_path)
+  local sln_dir = vim.fn.fnamemodify(sln_path, ":h")
+  local rel = M.relative(sln_dir, new_path)
+  local missing = ("%s is not listed in %s"):format(vim.fn.fnamemodify(old_path, ":t"), folder.name)
+  return edit(sln_path, function(content)
+    if is_slnx(sln_path) then
+      local ts, te = slnx_find_item(content, folder, sln_dir, old_path)
+      if not ts then
+        return nil, missing
+      end
+      local tag = content
+        :sub(ts, te)
+        :gsub('([Pp][Aa][Tt][Hh]%s*=%s*")[^"]*(")', "%1" .. xml_escape(rel):gsub("%%", "%%%%") .. "%2", 1)
+      return content:sub(1, ts - 1) .. tag .. content:sub(te + 1)
+    end
+    local ls, le, line = sln_find_item(content, folder, sln_dir, old_path)
+    if not ls then
+      return nil, missing
+    end
+    local win = rel:gsub("/", "\\")
+    local indent, ending = line:match("^(%s*)"), line:match("(\r?)$")
+    return content:sub(1, ls - 1) .. ("%s%s = %s%s\n"):format(indent, win, win, ending) .. content:sub(le)
+  end)
+end
+
 --- The path the parser gives the item `path` of `folder`, which the tree's
 --- node id is built from; nil when it is not listed.
 ---@param folder table

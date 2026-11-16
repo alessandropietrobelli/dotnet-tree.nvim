@@ -1,4 +1,5 @@
--- The terminal split `r`, `t`, `w` and `a` run in.
+-- The terminal split `,r`, `,t`, `,w` and `,a` run in, and the `dotnet remove`
+-- that `d` runs on a package, a reference or a project.
 --
 -- A `:terminal` buffer is named after its command line: `term://…//1234:dotnet
 -- run --project '/a/long/path/Api/Api.csproj'`, which a statusline cuts down

@@ -1,4 +1,4 @@
--- Azure Functions apps: how `r` starts one, and what it needs running (#57).
+-- Azure Functions apps: how `,r` starts one, and what it needs running (#57).
 --
 -- A function app is started by the Functions host, `func start`, not by the
 -- app itself. With `Microsoft.Azure.Functions.Worker.Sdk` 2.x, `dotnet run`
@@ -47,7 +47,7 @@ end
 --- `<AzureFunctionsVersion>`, it references `Microsoft.NET.Sdk.Functions` or
 --- `Microsoft.Azure.Functions.Worker.Sdk`, or its folder has a `host.json`.
 ---
---- `func` is true when `dotnet run` cannot start it and `r` has to run
+--- `func` is true when `dotnet run` cannot start it and `,r` has to run
 --- `func start` instead: an in-process app, or Worker SDK 1.x. The major
 --- version is the first number in the version as written, so `1.*` and
 --- `[1.17,2.0)` count as 1.x; a version with no number in it (a

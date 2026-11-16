@@ -3,6 +3,10 @@ local reveal = require("dotnet-tree.reveal")
 local terminal = require("dotnet-tree.terminal")
 
 local M = {}
+-- neo-tree's common commands, for its default keys (selection, preview,
+-- closing the window...). Those that act on files read a node's id or path as
+-- a file, which here it may not be: the file operations, their visual forms,
+-- the trash and the open commands are redefined below.
 for k, v in pairs(cc) do
   M[k] = v
 end
@@ -20,7 +24,7 @@ local NON_OPENABLE = {
 
 function M.show_help(state)
   local mappings = state.window and state.window.mappings or {}
-  local dotnet, other = {}, {}
+  local dotnet, files, other = {}, {}, {}
 
   for key, val in pairs(mappings) do
     local cmd, desc
@@ -34,8 +38,11 @@ function M.show_help(state)
     if cmd and cmd ~= "noop" and cmd ~= "none" then
       desc = desc or cmd
       local label = desc:match("^%[%.NET%]%s*(.+)$")
+      local file_label = desc:match("^%[file%]%s*(.+)$")
       if label then
         table.insert(dotnet, { key = key, desc = label })
+      elseif file_label then
+        table.insert(files, { key = key, desc = file_label })
       else
         table.insert(other, { key = key, desc = desc })
       end
@@ -48,6 +55,7 @@ function M.show_help(state)
     end)
   end
   sort(dotnet)
+  sort(files)
   sort(other)
 
   local lines = {}
@@ -62,6 +70,7 @@ function M.show_help(state)
     table.insert(lines, "")
   end
 
+  add_section("─── Files ───", files)
   add_section("─── .NET ───", dotnet)
   add_section("─── Navigation ───", other)
   if lines[#lines] == "" then
@@ -494,17 +503,10 @@ local function solution_add(state, target)
   end)
 end
 
-function M.add(state)
+--- `,a`: a package or a project reference, to the project under the cursor.
+function M.add_package_or_reference(state)
   local node = state.tree:get_node()
   if not node then
-    return
-  end
-  local target = solution_target(state)
-  if target and target.guid then
-    solution_add(state, target)
-    return
-  elseif target then
-    warn("`a` adds a file to a solution folder; `n` on the solution creates one")
     return
   end
   local proj_node = find_project_node(state)
@@ -566,21 +568,6 @@ local function compute_target_dir(state, proj_node)
   end
 end
 
-local function compute_namespace(target_dir, proj_path)
-  local proj_dir = vim.fs.normalize(vim.fn.fnamemodify(proj_path, ":h"))
-  local root_ns = vim.fn.fnamemodify(proj_path, ":t:r")
-  local target = vim.fs.normalize(target_dir)
-  local rel = target:sub(#proj_dir + 1):gsub("^/", "")
-  if rel == "" then
-    return root_ns
-  end
-  local parts = { root_ns }
-  for part in rel:gmatch("[^/]+") do
-    table.insert(parts, part)
-  end
-  return table.concat(parts, ".")
-end
-
 function M.new_file(state)
   local target = solution_target(state)
   if target then
@@ -610,7 +597,7 @@ function M.new_file(state)
       if typ == "interface" and not name:match("^I[%u]") then
         name = "I" .. name
       end
-      local ns = compute_namespace(target_dir, proj_node.extra.project.path)
+      local ns = require("dotnet-tree.namespace").for_dir(proj_node.extra.project.path, target_dir)
       local content = string.format(TEMPLATES[typ], ns, name)
       local target_path = target_dir .. "/" .. name .. ".cs"
 
@@ -660,7 +647,7 @@ function M.build(state)
   run_build("build", node.extra.project.path)
 end
 
--- `r`, `t` and `w` start in the project's folder, not in Neovim's: a function
+-- `,r`, `,t` and `,w` start in the project's folder, not in Neovim's: a function
 -- app's host is found relative to it (#57), and the default host of an
 -- ASP.NET Core app reads appsettings.json from its working directory.
 local function project_dir(path)
@@ -669,11 +656,11 @@ end
 
 local FUNC_INSTALL = "https://learn.microsoft.com/azure/azure-functions/functions-run-local"
 
--- What starting the project at `path` with `r` (`watch` false) or `w` → run
+-- What starting the project at `path` with `,r` (`watch` false) or `,w` → run
 -- (`watch` true) needs when it is an Azure Functions app (#57): `func` on
 -- PATH, and Azurite when the app uses it, which is checked in the background
 -- and only warned about. `dotnet watch` cannot start the host of an app that
--- `dotnet run` cannot start either, so `w` refuses those and points to `r`.
+-- `dotnet run` cannot start either, so `,w` refuses those and points to `,r`.
 -- Returns whether to go on, and the function app, nil for any other project.
 -- A refusal has been reported.
 local function prepare_function_app(path, watch)
@@ -695,7 +682,7 @@ local function prepare_function_app(path, watch)
   end
   if watch and fn_app.func then
     local msg = "[dotnet-tree] dotnet watch cannot start %s: an in-process or Worker SDK 1.x function app "
-      .. "runs with `func start`. Press `r` instead."
+      .. "runs with `func start`. Press `,r` instead."
     vim.notify(msg:format(name), vim.log.levels.ERROR)
     return false, fn_app
   end
@@ -764,7 +751,7 @@ function M.test(state)
   terminal.open("dotnet test " .. vim.fn.shellescape(path), "test " .. terminal.project_name(path), project_dir(path))
 end
 
--- `d`: build the project under the cursor, then start netcoredbg on what it
+-- `,d`: build the project under the cursor, then start netcoredbg on what it
 -- built. Both nvim-dap and netcoredbg are optional; dotnet-tree/debug.lua says
 -- so rather than raising when they are missing.
 function M.debug(state)
@@ -815,6 +802,681 @@ function M.watch(state)
       start(launch_profile.args(profile))
     end)
   end)
+end
+
+-- ─── file operations (#50) ─────────────────────────────────────────────────
+--
+-- Adding, renaming, moving, copying and deleting go through neo-tree's own
+-- file operations, which confirm a delete, rename open buffers and fire the
+-- events other plugins listen to. What a node stands for decides what an
+-- operation does: a file or folder of a project is on disk, a solution item is
+-- listed in the solution, and a package, a reference or a project is undone
+-- with the `dotnet` command that added it.
+
+local function fs_actions()
+  return require("neo-tree.sources.filesystem.lib.fs_actions")
+end
+
+local function display(path)
+  return vim.fn.fnamemodify(path, ":~:.")
+end
+
+-- Rebuild the tree and, when `path` is in it, put the cursor on it
+local function reveal_after(state, path)
+  local ok, err = pcall(function()
+    require("neo-tree.sources.manager").navigate(state, state.path, nil, function()
+      local id = path and state.dotnet_index and reveal.lookup(state.dotnet_index, path)
+      if id then
+        local focused, focus_err = pcall(reveal.focus, state, id)
+        if not focused then
+          warn(("could not put the cursor on %s: %s"):format(display(path), tostring(focus_err)))
+        end
+      end
+    end)
+  end)
+  if not ok then
+    warn("could not redraw the tree, rebuilding it: " .. tostring(err))
+    require("dotnet-tree.refresh").rebuild()
+  end
+end
+
+-- Why a node that has no file of its own cannot be acted on like one
+local NOT_A_FILE = {
+  package = "a package is not a file in the project",
+  project_reference = "a project reference is not a file in this project",
+  packages = "this groups the packages, it is not a folder",
+  projrefs = "this groups the project references, it is not a folder",
+  dependencies = "this groups the dependencies, it is not a folder",
+  frameworks = "this groups the target frameworks, it is not a folder",
+  framework = "a target framework is not a file",
+}
+
+-- What the verb reads like in a refusal, for the nodes the solution manages
+local DONE = { rename = "renamed", move = "moved", copy = "copied", cut = "moved", delete = "deleted" }
+
+local function refusal(op, node)
+  local kind = node.extra and node.extra.kind
+  local done = DONE[op] or op
+  local why = NOT_A_FILE[kind]
+  if kind == "solution" then
+    why = ("the solution file is not %s from the tree"):format(done)
+  elseif kind == "sln_folder" then
+    why = ("a solution folder only exists in the solution file, and is not %s from the tree yet"):format(done)
+  elseif kind == "project" then
+    why = ("a project is %s in its file and in the solution, which is not done from the tree"):format(done)
+  end
+  return ("cannot %s %s: %s"):format(op, node.name or "this", why or "it is not a file")
+end
+
+--- The file or folder on disk an operation on `node` acts on, or why there is
+--- none. `op` only words the refusal.
+---@param op string
+---@return table|nil { node, path, is_dir, sln_folder = guid of the folder listing it }
+---@return string|nil reason
+local function node_target(state, node, op)
+  local extra = node.extra or {}
+  if extra.kind == "folder" and node.path then
+    return { node = node, path = node.path, is_dir = true }
+  elseif extra.kind == "file" and node.path then
+    if extra.sln_folder then
+      return { node = node, path = node.path, sln_folder = extra.sln_folder }
+    end
+    -- The project node above this one, through the tree's parent links
+    local parent_id = node.get_parent_id and node:get_parent_id()
+    local parent = parent_id and state.tree:get_node(parent_id)
+    while parent and not (parent.extra and parent.extra.kind == "project") do
+      parent_id = parent.get_parent_id and parent:get_parent_id()
+      parent = parent_id and state.tree:get_node(parent_id)
+    end
+    if parent and parent.extra.project and parent.extra.project.path == node.path then
+      return nil,
+        ("cannot %s %s: the project file goes with its project, in the solution too"):format(op, node.name or "it")
+    end
+    return { node = node, path = node.path }
+  end
+  return nil, refusal(op, node)
+end
+
+local function disk_target(state, op)
+  local node = state.tree:get_node()
+  if not node then
+    return nil
+  end
+  return node_target(state, node, op)
+end
+
+-- The directory a paste or a new file goes into, from the node under the
+-- cursor: a folder itself, the folder of a project's file, a project's directory.
+local function target_dir(state, what)
+  local node = state.tree:get_node()
+  local extra = node and node.extra or {}
+  if extra.kind == "folder" and node.path then
+    return node.path
+  elseif extra.kind == "file" and node.path and not extra.sln_folder then
+    return vim.fn.fnamemodify(node.path, ":h")
+  elseif extra.kind == "project" and extra.project and extra.project.path then
+    return vim.fn.fnamemodify(extra.project.path, ":h")
+  elseif extra.kind == "sln_folder" or extra.sln_folder then
+    warn(("%s in a project: in a solution folder, `n` creates a file and `a` adds one"):format(what))
+    return
+  end
+  warn(("%s on a project, one of its folders or one of its files"):format(what))
+end
+
+-- After a file or folder moved, write the new path of every solution item it
+-- was, or held: a file can be reached through its project as well as through
+-- a solution folder.
+local function update_items(state, old, new, is_dir)
+  if not state.dotnet_sln then
+    return
+  end
+  local edit = require("dotnet-tree.solution_edit")
+  local solution = require("dotnet-tree.parser.solution")
+  solution.invalidate(state.dotnet_sln)
+  local sln = solution.parse(state.dotnet_sln)
+  if not sln then
+    return
+  end
+  local prefix = vim.fs.normalize(old) .. "/"
+  for _, folder in ipairs(sln.projects) do
+    for _, item in ipairs(folder.solution_items or {}) do
+      local item_path = vim.fs.normalize(item.path)
+      local moved_to
+      if edit.same_path(item_path, old) then
+        moved_to = new
+      elseif is_dir and item_path:sub(1, #prefix) == prefix then
+        moved_to = new .. "/" .. item_path:sub(#prefix + 1)
+      end
+      if moved_to then
+        local ok, err = edit.rename_item(state.dotnet_sln, folder, item.path, moved_to)
+        if not ok then
+          warn(
+            ("moved %s, but %s still lists its old path (%s): fix it there, or take it off and add it"):format(
+              display(item.path),
+              vim.fn.fnamemodify(state.dotnet_sln, ":t"),
+              err
+            )
+          )
+        end
+      end
+    end
+  end
+end
+
+-- The project file nearest above `path`
+local function project_file_of(path)
+  return vim.fs.find(function(name)
+    return name:match("%.[cfv][sb]proj$") ~= nil
+  end, { upward = true, path = vim.fn.fnamemodify(path, ":h"), limit = 1 })[1]
+end
+
+-- A file the project names (`<None Update="appsettings.json">`, a
+-- `<Compile Remove>`, an embedded resource) is not renamed in the project with
+-- it: say where to do it, rather than rewrite the project
+local function warn_if_named(path, done)
+  local project = project_file_of(path)
+  if not project then
+    return
+  end
+  local f = io.open(project, "r")
+  if not f then
+    return
+  end
+  local content = f:read("*a"):lower()
+  f:close()
+  local rel = require("dotnet-tree.solution_edit").relative(vim.fn.fnamemodify(project, ":h"), path):lower()
+  if content:find(rel, 1, true) or content:find((rel:gsub("/", "\\")), 1, true) then
+    warn(
+      ("%s is named in %s, which still points to it: update it there"):format(
+        vim.fn.fnamemodify(path, ":t"),
+        vim.fn.fnamemodify(project, ":t")
+      )
+    )
+  end
+  return done
+end
+
+-- The nearest directory of `path` that exists
+local function existing_dir(path)
+  local dir = vim.fn.fnamemodify(path, ":h")
+  while vim.fn.isdirectory(dir) == 0 do
+    local parent = vim.fn.fnamemodify(dir, ":h")
+    if parent == dir then
+      return nil
+    end
+    dir = parent
+  end
+  return dir
+end
+
+-- What would make neo-tree refuse or fail a move to `dest`, said before
+-- anything else happens: the language servers' edits are applied before the
+-- move, and neo-tree does not report back when it gives up.
+local function cannot_move(target, dest)
+  local src = vim.fs.normalize(target.path)
+  local stat = vim.uv.fs_stat(src)
+  if not stat then
+    return ("%s is no longer there"):format(display(src))
+  elseif dest == src then
+    return ("%s is already there"):format(display(src))
+  elseif target.is_dir and dest:sub(1, #src + 1) == src .. "/" then
+    return ("cannot move %s into itself"):format(display(src))
+  end
+  local edit = require("dotnet-tree.solution_edit")
+  -- On a file system that ignores case, a new case is the same file
+  if vim.uv.fs_stat(dest) and not edit.same_path(src, dest) then
+    return ("%s already exists"):format(display(dest))
+  end
+  local parent = existing_dir(dest)
+  if not parent then
+    return ("cannot move %s there: no such directory"):format(display(src))
+  end
+  local parent_stat = vim.uv.fs_stat(parent)
+  if parent_stat and parent_stat.dev ~= stat.dev then
+    return ("%s is on another volume: move it outside the tree"):format(display(dest))
+  end
+  if not vim.uv.fs_access(parent, "W") then
+    return ("%s is not writable"):format(display(parent))
+  end
+end
+
+-- Move or rename `target` to `dest`, telling the language servers; `on_done`
+-- runs once it has moved
+local function relocate(state, target, dest, verb, on_done)
+  dest = vim.fs.normalize(dest)
+  local problem = cannot_move(target, dest)
+  if problem then
+    warn(problem)
+    return
+  end
+  local lsp = require("dotnet-tree.lsp_files")
+  local edits = lsp.will_rename(target.path, dest)
+  if edits.err then
+    warn(edits.err .. ("; %s was not %s"):format(display(target.path), verb))
+    return
+  end
+  fs_actions().move_node(target.path, dest, function(_, final)
+    lsp.did_rename(target.path, final)
+    update_items(state, target.path, final, target.is_dir)
+    if not target.is_dir then
+      warn_if_named(target.path)
+    end
+    local by = ""
+    if edits.files > 0 then
+      by = (" (%d %s edited by %s, not saved yet: :wa)"):format(
+        edits.files,
+        edits.files == 1 and "file" or "files",
+        table.concat(edits.servers, ", ")
+      )
+    end
+    info(("%s %s to %s%s"):format(verb, display(target.path), display(final), by))
+    reveal_after(state, final)
+    if on_done then
+      on_done()
+    end
+  end, "")
+end
+
+local function refuse_if(reason)
+  if reason then
+    warn(reason)
+  end
+end
+
+local function ask_name(state, default, prompt_name, to_name)
+  local target, reason = disk_target(state, "rename")
+  if not target then
+    return refuse_if(reason)
+  end
+  vim.ui.input({ prompt = ("Rename %s to: "):format(prompt_name(target)), default = default(target) }, function(answer)
+    answer = answer and vim.trim(answer)
+    if not answer or answer == "" or answer == default(target) then
+      return
+    end
+    if answer:find("[/\\]") then
+      warn("give a name, not a path: `m` moves")
+      return
+    end
+    relocate(state, target, vim.fn.fnamemodify(target.path, ":h") .. "/" .. to_name(target, answer), "renamed")
+  end)
+end
+
+local function tail(target)
+  return vim.fn.fnamemodify(target.path, ":t")
+end
+
+function M.rename(state)
+  ask_name(state, tail, tail, function(_, answer)
+    return answer
+  end)
+end
+
+--- `b`: rename without retyping the extension.
+function M.rename_basename(state)
+  ask_name(
+    state,
+    function(target)
+      return vim.fn.fnamemodify(target.path, ":t:r")
+    end,
+    tail,
+    function(target, answer)
+      local ext = vim.fn.fnamemodify(target.path, ":e")
+      return ext ~= "" and (answer .. "." .. ext) or answer
+    end
+  )
+end
+
+-- A path typed at a prompt, absolute: `~` is expanded and a relative path is
+-- taken from the working directory. `%`, `$VAR` and wildcards are kept as
+-- written, as the names of files they are.
+local function typed_path(input)
+  local path = vim.fs.normalize(input)
+  if not path:match("^/") and not path:match("^%a:[/\\]") then
+    path = vim.fs.normalize(vim.fn.getcwd() .. "/" .. path)
+  end
+  return path
+end
+
+-- Ask where `target` goes: a path, or a directory that keeps its name
+local function ask_destination(target, verb, cb)
+  vim.ui.input({
+    prompt = ("%s %s to: "):format(verb, tail(target)),
+    default = display(target.path),
+    completion = "file",
+  }, function(input)
+    input = input and vim.trim(input)
+    if not input or input == "" then
+      return
+    end
+    local dest = typed_path(input)
+    if input:match("[/\\]$") or vim.fn.isdirectory(dest) == 1 then
+      dest = dest .. "/" .. tail(target)
+    end
+    cb(vim.fs.normalize(dest))
+  end)
+end
+
+function M.move(state)
+  local target, reason = disk_target(state, "move")
+  if not target then
+    return refuse_if(reason)
+  end
+  ask_destination(target, "Move", function(dest)
+    relocate(state, target, dest, "moved")
+  end)
+end
+
+-- Copy `target` to `dest`, the way `p` pastes a copy; `on_done` once copied
+local function duplicate(state, target, dest, on_done)
+  if not vim.uv.fs_stat(target.path) then
+    warn(("%s is no longer there"):format(display(target.path)))
+    return
+  end
+  if vim.uv.fs_stat(dest) then
+    warn(("%s already exists: `c` copies it under another name"):format(display(dest)))
+    return
+  end
+  fs_actions().copy_node(target.path, dest, function(_, final)
+    info(("copied %s to %s"):format(display(target.path), display(final)))
+    reveal_after(state, final)
+    if on_done then
+      on_done()
+    end
+  end, "")
+end
+
+--- `c`: copy to a path asked for.
+function M.copy(state)
+  local target, reason = disk_target(state, "copy")
+  if not target then
+    return refuse_if(reason)
+  end
+  ask_destination(target, "Copy", function(dest)
+    duplicate(state, target, dest)
+  end)
+end
+
+-- Several nodes act together only when all are files or folders of projects:
+-- a selection reaching a package, a project or a solution item would do more
+-- than it shows. Returns the targets, or nil once the refusal is said.
+local function selected_targets(state, nodes, op)
+  local targets, others = {}, {}
+  for _, node in ipairs(nodes or {}) do
+    local target = node_target(state, node, op)
+    if target and not target.sln_folder then
+      table.insert(targets, target)
+    else
+      table.insert(others, node.name or "?")
+    end
+  end
+  if #others > 0 then
+    warn(
+      ("only files and folders of projects can be %s together, not %s: the rest one at a time"):format(
+        DONE[op] or op,
+        table.concat(others, ", ")
+      )
+    )
+    return nil
+  end
+  return targets
+end
+
+local function names_of(targets)
+  return table.concat(
+    vim.tbl_map(function(target)
+      return tail(target)
+    end, targets),
+    ", "
+  )
+end
+
+local function to_clipboard(state, action, targets)
+  state.dotnet_clipboard = { action = action, targets = targets }
+  info(("%s %s: press p where it goes"):format(action == "copy" and "copied" or "cut", names_of(targets)))
+end
+
+function M.copy_to_clipboard(state)
+  local target, reason = disk_target(state, "copy")
+  if not target then
+    return refuse_if(reason)
+  end
+  to_clipboard(state, "copy", { target })
+end
+
+function M.cut_to_clipboard(state)
+  local target, reason = disk_target(state, "cut")
+  if not target then
+    return refuse_if(reason)
+  end
+  to_clipboard(state, "cut", { target })
+end
+
+function M.copy_to_clipboard_visual(state, nodes)
+  local targets = selected_targets(state, nodes, "copy")
+  if targets then
+    to_clipboard(state, "copy", targets)
+  end
+end
+
+function M.cut_to_clipboard_visual(state, nodes)
+  local targets = selected_targets(state, nodes, "cut")
+  if targets then
+    to_clipboard(state, "cut", targets)
+  end
+end
+
+function M.clear_clipboard(state)
+  state.dotnet_clipboard = nil
+end
+
+function M.paste_from_clipboard(state)
+  local clip = state.dotnet_clipboard
+  if not clip or #clip.targets == 0 then
+    warn("nothing to paste: y copies and x cuts")
+    return
+  end
+  local dir = target_dir(state, "paste")
+  if not dir then
+    return
+  end
+  for _, target in ipairs(vim.list_slice(clip.targets)) do
+    local dest = dir .. "/" .. tail(target)
+    if clip.action == "cut" then
+      -- A cut is pasted once: each one leaves the clipboard when it has moved
+      relocate(state, target, dest, "moved", function()
+        for i, t in ipairs(clip.targets) do
+          if t == target then
+            table.remove(clip.targets, i)
+            break
+          end
+        end
+        if #clip.targets == 0 and state.dotnet_clipboard == clip then
+          state.dotnet_clipboard = nil
+        end
+      end)
+    else
+      duplicate(state, target, dest)
+    end
+  end
+end
+
+--- `a`: what adding means on the node. On a solution folder, an existing file
+--- (see the solution folders above); on packages or project references, one
+--- more; anywhere else in a project, a new file -- or a folder, when the name
+--- ends in `/` -- of any kind, not only a .cs one from a template.
+function M.add(state)
+  local node = state.tree:get_node()
+  if not node then
+    return
+  end
+  local target = solution_target(state)
+  if target and target.guid then
+    solution_add(state, target)
+    return
+  elseif target then
+    warn("nothing to add to the solution itself: `n` creates a solution folder")
+    return
+  end
+  local kind = node.extra and node.extra.kind
+  if kind == "packages" or kind == "package" or kind == "projrefs" or kind == "project_reference" then
+    M.add_package_or_reference(state)
+    return
+  end
+  local dir = target_dir(state, "a new file goes")
+  if not dir then
+    return
+  end
+  fs_actions().create_node(dir, function(dest)
+    reveal_after(state, dest)
+  end, dir)
+end
+
+function M.add_directory(state)
+  local dir = target_dir(state, "a new folder goes")
+  if not dir then
+    return
+  end
+  fs_actions().create_directory(dir, function(dest)
+    if vim.fn.isdirectory(dest) == 0 then
+      warn(("could not create %s"):format(display(dest)))
+      return
+    end
+    reveal_after(state, dest)
+  end, dir)
+end
+
+local function confirm(message, cb)
+  require("neo-tree.ui.inputs").confirm(message, function(yes)
+    if yes then
+      cb()
+    end
+  end)
+end
+
+local REMOVABLE = { project = true, package = true, project_reference = true }
+
+-- `d` on a package, a project reference or a project: undo what added it,
+-- with the `dotnet` command that did. Returns whether `node` is one of them.
+local function delete_from_project(state, node)
+  local kind = node.extra and node.extra.kind
+  if not REMOVABLE[kind] then
+    return false
+  end
+  local project = find_project_node(state)
+  local csproj = project and project.extra.project and project.extra.project.path
+  if not csproj then
+    warn(("cannot remove %s: the project it belongs to was not found; press R"):format(node.name or "it"))
+  elseif kind == "project" then
+    if not state.dotnet_sln then
+      warn("no solution loaded")
+      return true
+    end
+    confirm(("Remove %s from the solution? Its files stay on disk."):format(node.name), function()
+      local sln = state.dotnet_sln
+      terminal.open(
+        "dotnet sln " .. vim.fn.shellescape(sln) .. " remove " .. vim.fn.shellescape(csproj),
+        "remove " .. node.name .. " from " .. vim.fn.fnamemodify(sln, ":t")
+      )
+    end)
+  elseif kind == "package" then
+    local package = node.extra.package.name
+    confirm(("Remove package %s from %s?"):format(package, project.name), function()
+      terminal.open(
+        "dotnet remove " .. vim.fn.shellescape(csproj) .. " package " .. vim.fn.shellescape(package),
+        "remove " .. package .. " from " .. terminal.project_name(csproj)
+      )
+    end)
+  elseif not node.path then
+    warn(("cannot remove the reference to %s: its path is not known; press R"):format(node.name or "it"))
+  else
+    confirm(("Remove the reference to %s from %s?"):format(node.name, project.name), function()
+      terminal.open(
+        "dotnet remove " .. vim.fn.shellescape(csproj) .. " reference " .. vim.fn.shellescape(node.path),
+        "remove " .. node.name .. " from " .. terminal.project_name(csproj)
+      )
+    end)
+  end
+  return true
+end
+
+function M.delete(state)
+  local node = state.tree:get_node()
+  if not node then
+    return
+  end
+  if delete_from_project(state, node) then
+    return
+  end
+  local target, reason = disk_target(state, "delete")
+  if not target then
+    return refuse_if(reason)
+  end
+  if target.sln_folder then
+    local _, folder = load_solution(state, target.sln_folder)
+    if not folder then
+      return
+    end
+    local name = tail(target)
+    confirm(("Take %s off %s? The file stays on disk."):format(name, folder.name), function()
+      local ok, err = require("dotnet-tree.solution_edit").remove_item(state.dotnet_sln, folder, target.path)
+      if not ok then
+        warn(err)
+        return
+      end
+      info(("took %s off %s"):format(name, folder.name))
+      reveal_after(state, nil)
+    end)
+    return
+  end
+  -- neo-tree asks first and says what it deleted
+  fs_actions().delete_node(target.path, function()
+    if not target.is_dir then
+      warn_if_named(target.path)
+    end
+    reveal_after(state, vim.fn.fnamemodify(target.path, ":h"))
+  end)
+end
+
+--- `d` on a selection: files and folders of projects only, after one question.
+function M.delete_visual(state, nodes)
+  local targets = selected_targets(state, nodes, "delete")
+  if not targets or #targets == 0 then
+    return
+  end
+  confirm(("Delete %s?"):format(names_of(targets)), function()
+    local left = #targets
+    for _, target in ipairs(targets) do
+      fs_actions().delete_node(target.path, function()
+        left = left - 1
+        if left == 0 then
+          reveal_after(state, vim.fn.fnamemodify(target.path, ":h"))
+        end
+      end, true)
+    end
+  end)
+end
+
+-- neo-tree's trash and its undo work on its filesystem source; here `d` deletes
+local function no_trash()
+  warn("there is no trash in the .NET tree: `d` deletes, after asking")
+end
+M.trash, M.trash_visual, M.restore_from_trash, M.restore_from_trash_visual, M.undo =
+  no_trash, no_trash, no_trash, no_trash, no_trash
+
+-- neo-tree's open commands, behind the same check as `open`: a node with no
+-- file of its own (a package, a group, the solution) is toggled, never opened
+-- as a buffer named after its id
+for name, fn in pairs(cc) do
+  if type(fn) == "function" and (name:match("^open_") or name:match("with_window_picker$")) then
+    M[name] = function(state, ...)
+      local node = state.tree:get_node()
+      local kind = node and node.extra and node.extra.kind
+      if node and (NON_OPENABLE[kind] or not node.path) then
+        return M.open(state)
+      end
+      return fn(state, ...)
+    end
+  end
 end
 
 return M
