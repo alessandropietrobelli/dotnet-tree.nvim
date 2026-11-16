@@ -272,6 +272,16 @@ describe("file operations from the tree", function()
         vim.fn.delete(path, "rf")
         cb(path)
       end,
+      create_node = function(in_dir, cb, root)
+        local name = table.remove(inputs, 1)
+        local dest = root .. "/" .. name
+        if name:sub(-1) == "/" then
+          vim.fn.mkdir(dest, "p")
+        else
+          write(dest, "")
+        end
+        cb(in_dir .. "/" .. name)
+      end,
       create_directory = function(in_dir, cb, root)
         local name = table.remove(inputs, 1)
         vim.fn.mkdir(root .. "/" .. name, "p")
@@ -462,5 +472,107 @@ describe("file operations from the tree", function()
     commands.delete(state_on({ name = "Packages", extra = { kind = "packages" } }))
     assert.is_true(said("cannot delete Packages"))
     assert.are.same({}, terminals)
+  end)
+
+  it("adds a file of any kind with a, or a folder when the name ends in /", function()
+    inputs = { "appsettings.Development.json" }
+    commands.add(state_on(file(dir .. "/src/Api/Foo.cs")))
+    inputs = { "Views/" }
+    commands.add(state_on({ name = "Api", extra = { kind = "project", project = { path = project } } }))
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/appsettings.Development.json"))
+    assert.are.equal(1, vim.fn.isdirectory(dir .. "/src/Api/Views"))
+  end)
+
+  it("adds a package or a reference with a on their groups, as ,a does", function()
+    local offered
+    stub(vim.ui, "select", function(items)
+      offered = items
+    end)
+    local called = {}
+    stub(require("dotnet-tree.nuget"), "open", function(kind)
+      table.insert(called, kind)
+      return true
+    end)
+    commands.add(state_on({ name = "Packages", extra = { kind = "packages" } }))
+    assert.are.same({ "packages" }, called)
+    commands.add_package_or_reference(state_on(file(dir .. "/src/Api/Foo.cs")))
+    assert.are.same({ "package", "reference" }, offered)
+  end)
+
+  it("renames keeping the extension with b, and copies to a path with c", function()
+    inputs = { "Bar" }
+    commands.rename_basename(state_on(file(dir .. "/src/Api/Foo.cs")))
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/Bar.cs"))
+    vim.fn.mkdir(dir .. "/src/Api/Models", "p")
+    inputs = { dir .. "/src/Api/Models/" }
+    commands.copy(state_on(file(dir .. "/src/Api/Bar.cs")))
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/Bar.cs"))
+    assert.are.equal(1, vim.fn.filereadable(dir .. "/src/Api/Models/Bar.cs"))
+    inputs = { dir .. "/src/Api/Models/" }
+    commands.copy(state_on(file(dir .. "/src/Api/Bar.cs")))
+    assert.is_true(said("already exists"))
+  end)
+end)
+
+-- tpodolak's point on #50: neo-tree's keys for files mean the same here, and
+-- the .NET actions live under a prefix of their own
+describe("default mappings", function()
+  local mappings = require("dotnet-tree").default_config.window.mappings
+
+  it("keep neo-tree's keys for files", function()
+    for key, command in pairs({
+      a = "add",
+      A = "add_directory",
+      d = "delete",
+      r = "rename",
+      b = "rename_basename",
+      m = "move",
+      c = "copy",
+      y = "copy_to_clipboard",
+      x = "cut_to_clipboard",
+      p = "paste_from_clipboard",
+    }) do
+      assert.are.equal(command, mappings[key][1], key)
+    end
+  end)
+
+  it("put every .NET action under ,", function()
+    for _, command in ipairs({
+      "select_solution",
+      "edit_project_file",
+      "add_package_or_reference",
+      "build",
+      "build_solution",
+      "clean",
+      "clean_solution",
+      "run_project",
+      "debug",
+      "test",
+      "watch",
+      "choose_launch_profile",
+    }) do
+      local keys = {}
+      for key, value in pairs(mappings) do
+        if type(value) == "table" and value[1] == command then
+          table.insert(keys, key)
+        end
+      end
+      assert.are.equal(1, #keys, command)
+      assert.matches("^,", keys[1], command)
+    end
+  end)
+
+  it("map only commands the source has", function()
+    package.loaded["neo-tree.sources.common.commands"] = {}
+    package.loaded["dotnet-tree.commands"] = nil
+    local commands = require("dotnet-tree.commands")
+    for key, value in pairs(mappings) do
+      local command = type(value) == "table" and value[1] or value
+      if command ~= "show_help" and command ~= "toggle_node" and command ~= "open" then
+        assert.is_function(commands[command], key .. " -> " .. tostring(command))
+      end
+    end
+    package.loaded["neo-tree.sources.common.commands"] = nil
+    package.loaded["dotnet-tree.commands"] = nil
   end)
 end)

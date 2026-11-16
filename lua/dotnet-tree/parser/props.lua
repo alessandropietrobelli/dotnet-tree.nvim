@@ -144,6 +144,28 @@ function M.imports_file_above(root, filename)
 end
 local imports_file_above = M.imports_file_above
 
+--- An MSBuild property is whatever the last unconditional assignment says. A
+--- `Condition` we cannot evaluate is skipped rather than guessed at, so a
+--- property declared only conditionally reads as nil -- unknown -- and the
+--- caller decides what to do about it. The value is returned as written: a
+--- `$(Property)` reference is not expanded here.
+---@param root table parsed XML
+---@param name string
+---@return string|nil
+function M.property(root, name)
+  local value = nil
+  for _, group in ipairs(xml.find_all(root, "PropertyGroup")) do
+    if xml.attr_ci(group.attrs, "Condition") == nil then
+      for _, node in ipairs(group.children) do
+        if node.tag == name and xml.attr_ci(node.attrs, "Condition") == nil and node.text ~= "" then
+          value = node.text
+        end
+      end
+    end
+  end
+  return value
+end
+
 -- One props file, parsed once per (path, mtime): the frameworks it names and
 -- whether it chains upward.
 local function read_props(path)
@@ -161,7 +183,12 @@ local function read_props(path)
     local content = f:read("*a")
     f:close()
     local root = xml.parse(content)
-    cached = { mtime = mtime, frameworks = M.frameworks(root), imports_above = imports_file_above(root) }
+    cached = {
+      mtime = mtime,
+      frameworks = M.frameworks(root),
+      root_namespace = M.property(root, "RootNamespace"),
+      imports_above = imports_file_above(root),
+    }
     cache[path] = cached
   end
   return cached
@@ -208,6 +235,33 @@ function M.inherited_frameworks(dir)
     return nil, nil
   end
   return nil, table.concat(stamp, "|")
+end
+
+--- The `RootNamespace` a project in `dir` inherits, from the nearest
+--- `Directory.Build.props` and the files it chains up to; nil when none sets
+--- one. Written as it is, `$(...)` references included.
+---@param dir string
+---@return string|nil
+function M.inherited_root_namespace(dir)
+  local path = M.find_up(dir, "Directory.Build.props")
+  local guard = 32
+  while path and guard > 0 do
+    guard = guard - 1
+    path = vim.fs.normalize(path)
+    local entry = read_props(path)
+    if not entry then
+      return nil
+    end
+    if entry.root_namespace then
+      return entry.root_namespace
+    end
+    if not entry.imports_above then
+      return nil
+    end
+    local dir_of_file = vim.fn.fnamemodify(path, ":h")
+    local above = vim.fn.fnamemodify(dir_of_file, ":h")
+    path = above ~= dir_of_file and M.find_up(above, "Directory.Build.props") or nil
+  end
 end
 
 return M

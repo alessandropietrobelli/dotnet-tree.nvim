@@ -494,17 +494,10 @@ local function solution_add(state, target)
   end)
 end
 
-function M.add(state)
+--- `,a`: a package or a project reference, to the project under the cursor.
+function M.add_package_or_reference(state)
   local node = state.tree:get_node()
   if not node then
-    return
-  end
-  local target = solution_target(state)
-  if target and target.guid then
-    solution_add(state, target)
-    return
-  elseif target then
-    warn("`a` adds a file to a solution folder; `n` on the solution creates one")
     return
   end
   local proj_node = find_project_node(state)
@@ -566,21 +559,6 @@ local function compute_target_dir(state, proj_node)
   end
 end
 
-local function compute_namespace(target_dir, proj_path)
-  local proj_dir = vim.fs.normalize(vim.fn.fnamemodify(proj_path, ":h"))
-  local root_ns = vim.fn.fnamemodify(proj_path, ":t:r")
-  local target = vim.fs.normalize(target_dir)
-  local rel = target:sub(#proj_dir + 1):gsub("^/", "")
-  if rel == "" then
-    return root_ns
-  end
-  local parts = { root_ns }
-  for part in rel:gmatch("[^/]+") do
-    table.insert(parts, part)
-  end
-  return table.concat(parts, ".")
-end
-
 function M.new_file(state)
   local target = solution_target(state)
   if target then
@@ -610,7 +588,7 @@ function M.new_file(state)
       if typ == "interface" and not name:match("^I[%u]") then
         name = "I" .. name
       end
-      local ns = compute_namespace(target_dir, proj_node.extra.project.path)
+      local ns = require("dotnet-tree.namespace").for_dir(proj_node.extra.project.path, target_dir)
       local content = string.format(TEMPLATES[typ], ns, name)
       local target_path = target_dir .. "/" .. name .. ".cs"
 
@@ -964,16 +942,36 @@ function M.rename(state)
   end)
 end
 
-function M.move(state)
-  local target, reason = disk_target(state, "move")
+--- `b`: rename without retyping the extension.
+function M.rename_basename(state)
+  local target, reason = disk_target(state, "rename")
   if not target then
     if reason then
       warn(reason)
     end
     return
   end
+  local name = vim.fn.fnamemodify(target.path, ":t")
+  local ext = vim.fn.fnamemodify(target.path, ":e")
+  local base = vim.fn.fnamemodify(target.path, ":t:r")
+  vim.ui.input({ prompt = ("Rename %s to: "):format(name), default = base }, function(new_base)
+    new_base = new_base and vim.trim(new_base)
+    if not new_base or new_base == "" or new_base == base then
+      return
+    end
+    if new_base:find("[/\\]") then
+      warn("give a name, not a path: `m` moves")
+      return
+    end
+    local new_name = ext ~= "" and (new_base .. "." .. ext) or new_base
+    relocate(state, target, vim.fn.fnamemodify(target.path, ":h") .. "/" .. new_name, "renamed")
+  end)
+end
+
+-- Ask where `target` goes: a path, or a directory that keeps its name
+local function ask_destination(target, verb, cb)
   vim.ui.input({
-    prompt = ("Move %s to: "):format(vim.fn.fnamemodify(target.path, ":t")),
+    prompt = ("%s %s to: "):format(verb, vim.fn.fnamemodify(target.path, ":t")),
     default = display(target.path),
     completion = "file",
   }, function(input)
@@ -982,11 +980,49 @@ function M.move(state)
       return
     end
     local dest = vim.fn.fnamemodify(vim.fn.expand(input), ":p")
-    -- Into a directory, keeping the name
     if input:sub(-1) == "/" or vim.fn.isdirectory(dest) == 1 then
       dest = dest:gsub("/$", "") .. "/" .. vim.fn.fnamemodify(target.path, ":t")
     end
+    cb(vim.fs.normalize(dest))
+  end)
+end
+
+function M.move(state)
+  local target, reason = disk_target(state, "move")
+  if not target then
+    if reason then
+      warn(reason)
+    end
+    return
+  end
+  ask_destination(target, "Move", function(dest)
     relocate(state, target, dest, "moved")
+  end)
+end
+
+-- Copy `target` to `dest`, the way `p` pastes a copy
+local function duplicate(state, target, dest)
+  if vim.uv.fs_stat(dest) then
+    warn(("%s already exists"):format(display(dest)))
+    return
+  end
+  fs_actions().copy_node(target.path, dest, function(_, final)
+    info(("copied %s to %s"):format(display(target.path), display(final)))
+    reveal_after(state, final)
+  end, "")
+end
+
+--- `c`: copy to a path asked for.
+function M.copy(state)
+  local target, reason = disk_target(state, "copy")
+  if not target then
+    if reason then
+      warn(reason)
+    end
+    return
+  end
+  ask_destination(target, "Copy", function(dest)
+    duplicate(state, target, dest)
   end)
 end
 
@@ -1026,10 +1062,38 @@ function M.paste_from_clipboard(state)
     relocate(state, clip.target, dest, "moved")
     return
   end
-  fs_actions().copy_node(clip.target.path, dest, function(_, final)
-    info(("copied %s to %s"):format(display(clip.target.path), display(final)))
-    reveal_after(state, final)
-  end, "")
+  duplicate(state, clip.target, dest)
+end
+
+--- `a`: what adding means on the node. On a solution folder, an existing file
+--- (see the solution folders above); on packages or project references, one
+--- more; anywhere else in a project, a new file -- or a folder, when the name
+--- ends in `/` -- of any kind, not only a .cs one from a template.
+function M.add(state)
+  local node = state.tree:get_node()
+  if not node then
+    return
+  end
+  local target = solution_target(state)
+  if target and target.guid then
+    solution_add(state, target)
+    return
+  elseif target then
+    warn("nothing to add to the solution itself: `n` creates a solution folder")
+    return
+  end
+  local kind = node.extra and node.extra.kind
+  if kind == "packages" or kind == "package" or kind == "projrefs" or kind == "project_reference" then
+    M.add_package_or_reference(state)
+    return
+  end
+  local dir = target_dir(state, "a new file goes")
+  if not dir then
+    return
+  end
+  fs_actions().create_node(dir, function(dest)
+    reveal_after(state, dest)
+  end, dir)
 end
 
 function M.add_directory(state)
@@ -1124,6 +1188,27 @@ function M.delete(state)
   fs_actions().delete_node(target.path, function()
     reveal_after(state, vim.fn.fnamemodify(target.path, ":h"))
   end)
+end
+
+-- neo-tree's own commands for what this source does not do differently:
+-- opening in a split, a tab or a picked window, the preview, closing the
+-- window, so its default keys work here as in its other sources. `add`,
+-- `delete` and the like are not taken: they read the node id as a path, which
+-- it is not here.
+for _, pattern in ipairs({
+  "^open",
+  "^split_with",
+  "^vsplit_with",
+  "preview",
+  "^close_window$",
+  "^toggle_auto_expand_width$",
+  "^show_file_details$",
+  "^cancel$",
+  "_source$",
+}) do
+  if cc._add_common_commands then
+    cc._add_common_commands(M, pattern)
+  end
 end
 
 return M

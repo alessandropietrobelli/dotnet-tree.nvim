@@ -669,7 +669,7 @@ describe("n and a on the solution and its folders", function()
     local _, path = solution_file("All.sln", vs_sln("\n"))
     commands.add(state_on(path, { kind = "solution" }))
     commands.add(state_on(path, { kind = "sln_folder", guid = "00000000-0000-0000-0000-000000000000" }))
-    assert.is_true(said("`n` on the solution creates one"))
+    assert.is_true(said("`n` creates a solution folder"))
     assert.is_true(said("no longer in the solution file; press R"))
   end)
 
@@ -682,20 +682,29 @@ describe("n and a on the solution and its folders", function()
     assert.are.equal(build.guid, folder_named(parse(path), "ci").parent_guid)
   end)
 
-  -- A project, or a file in one, is not a solution target: the old `a` and `n`
-  it("leaves a and n on a project to packages, references and templates", function()
+  -- A project, or a file in one, is not a solution target: `a` adds a file to
+  -- it, `,a` a package or reference, `n` a .cs file from a template
+  it("leaves a, ,a and n on a project to files, packages and templates", function()
     local _, path = solution_file("All.sln", vs_sln("\n"))
     local before = bytes(path)
-    local offered
+    local offered, created
     vim.ui.select = function(items)
       offered = items
     end
+    package.loaded["neo-tree.sources.filesystem.lib.fs_actions"] = {
+      create_node = function(in_dir)
+        created = in_dir
+      end,
+    }
     local project = state_on(path, { kind = "project", project = { path = "/src/Api/Api.csproj" } })
     project.tree:get_node().name = "Api"
     commands.add(project)
+    assert.are.equal("/src/Api", created)
+    commands.add_package_or_reference(project)
     assert.are.same({ "package", "reference" }, offered)
     commands.new_file(project)
     assert.are.same({ "class", "interface", "record", "struct", "enum" }, offered)
     assert.are.equal(before, bytes(path))
+    package.loaded["neo-tree.sources.filesystem.lib.fs_actions"] = nil
   end)
 end)

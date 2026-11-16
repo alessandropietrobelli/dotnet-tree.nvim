@@ -38,7 +38,7 @@ tree plugin. See |dotnet-tree-installation|.
   - Neovim >= 0.9
   - neo-tree.nvim              https://github.com/nvim-neo-tree/neo-tree.nvim
   - the `dotnet` CLI on $PATH, for the build/run/test/watch/add actions only
-  - optional, for `d` only: nvim-dap, and netcoredbg on $PATH or in mason
+  - optional, for `,d` only: nvim-dap, and netcoredbg on $PATH or in mason
 
 ==============================================================================
 3. INSTALLATION                                 *dotnet-tree-installation*
@@ -80,7 +80,7 @@ Open the tree: >
     :Neotree dotnet-tree reveal
 <
 The source looks for a solution under the current working directory. When a
-repository contains more than one, press `s` to choose; the choice is
+repository contains more than one, press `,s` to choose; the choice is
 persisted per working directory in: >
     stdpath("state")/dotnet-tree/solutions.json
 <
@@ -137,7 +137,7 @@ project file from Neovim).
                                                         *dotnet-tree-quickfix*
 BUILD OUTPUT
 
-`b`, `B`, `c` and `C` send their diagnostics to the |quickfix| list, so a
+`,b`, `,B`, `,c` and `,C` send their diagnostics to the |quickfix| list, so a
 failed build is a list you can jump through with |:cnext| rather than a
 terminal buffer you have to read. The window opens only when the command
 failed; a successful build is a single message. Errors MSBuild reports without
@@ -149,7 +149,7 @@ MSBuild prints every diagnostic twice, and once per target framework on a
 multi-targeted project. Those copies are collapsed into one entry per source
 position.
 
-`r`, `t` and `w` still open a terminal split, where their output is
+`,r`, `,t` and `,w` still open a terminal split, where their output is
 interactive. The terminal buffer is named after what it runs and on which
 project — `dotnet-tree://run Api`, `dotnet-tree://watch test Api.Tests` — so
 the split's |winbar| tells a run from a watch. A second terminal for the
@@ -167,7 +167,7 @@ the raw output goes to the list verbatim rather than being dropped.
                                                            *dotnet-tree-debug*
 DEBUGGING
 
-`d` debugs the project under the cursor. It resolves that project's own
+`,d` debugs the project under the cursor. It resolves that project's own
 output, builds it, and starts netcoredbg on the assembly the build produced:
 
   OutputType     decides whether there is an entry point to launch at all,
@@ -177,9 +177,9 @@ output, builds it, and starts netcoredbg on the assembly the build produced:
   AssemblyName   decides what the produced file is called
   TargetFramework  decides which output a multi-targeted project means
 
-The build is pinned to the `Debug` configuration, because that is what `d`
+The build is pinned to the `Debug` configuration, because that is what `,d`
 means: an optimised assembly is one netcoredbg warns about, and the warning is
-that breakpoints will not be hit. `b` and `c` are not pinned — a project that
+that breakpoints will not be hit. `,b` and `,c` are not pinned — a project that
 declares `Release` means it for the build.
 
 Where the assembly is, though, is asked of MSBuild rather than composed:
@@ -196,13 +196,13 @@ just before it, also when <AssemblyName> is written as a property such as
 `$(ToolName)`. `-getProperty` needs the .NET 8 SDK or newer; on an older SDK
 the default layout is composed as it was before, which is no loss because the
 artifacts layout is itself .NET 8 and later. The exception is an AssemblyName
-written as a property: only MSBuild can expand it, so there `d` stops after
+written as a property: only MSBuild can expand it, so there `,d` stops after
 the build and says why. When MSBuild fails to answer on a newer SDK, the
 message quotes its error.
 
                                                   *dotnet-tree-launch-profile*
 The launch profile is read too. `Properties/launchSettings.json` is what makes
-`r` and `d` differ otherwise: `r` runs `dotnet run`, which reads it, and `d`
+`,r` and `,d` differ otherwise: `,r` runs `dotnet run`, which reads it, and `,d`
 starts the assembly, which does not. On a `dotnet new webapi` that showed up as
 the same project coming up in Development under one key and Production under
 the other. Four things are taken from the profile:
@@ -220,14 +220,14 @@ such profile, it is the one `dotnet run` uses with no `--launch-profile`, and
 nothing is asked.
 
 A project with several (a web project usually has `http` and `https`) asks
-which one the first time `r`, `d` or `w` → run starts it, with the first in
+which one the first time `,r`, `,d` or `,w` → run starts it, with the first in
 the file, the one `dotnet run` picks by default, marked as such. The choice is
-remembered for that project across sessions, and `r` and `w` → run pass it to
-`dotnet` as `--launch-profile`. `L` on the project asks again. If the file no
+remembered for that project across sessions, and `,r` and `,w` → run pass it to
+`dotnet` as `--launch-profile`. `,l` on the project asks again. If the file no
 longer has the profile chosen, the question comes back; if it is left with
-one profile or none, a message says the choice is no longer used. `d` asks
+one profile or none, a message says the choice is no longer used. `,d` asks
 after it has checked the project can be launched, and before the build. An
-in-process or Worker SDK 1.x function app, which `r` starts with `func start`,
+in-process or Worker SDK 1.x function app, which `,r` starts with `func start`,
 reads no profile and asks nothing.
 
 Comments and trailing commas are read, as `dotnet` reads them. A project with
@@ -246,7 +246,7 @@ Both dependencies are optional and are checked before anything else happens:
 Neither is required for the rest of the plugin, and their absence is a message
 plus a |:checkhealth-dotnet-tree| entry, never an error inside the tree.
 
-What `d` refuses, and why it says so instead of launching:
+What `,d` refuses, and why it says so instead of launching:
 
   a library                 no entry point; the runtime error you would get
                             instead says nothing about the real problem
@@ -276,7 +276,7 @@ all: it names its one output. Only a multi-targeted project has no single
 answer, and that is the case that asks.
 
 A test project is a runnable assembly too -- xunit v3 test projects declare
-`<OutputType>Exe</OutputType>` -- so `d` debugs one rather than refusing it,
+`<OutputType>Exe</OutputType>` -- so `,d` debugs one rather than refusing it,
 and says so before launching: what you get is the whole test suite under the
 debugger, and the dap session is named "(tests)". A project counts as a test
 project when it declares `<IsTestProject>` or references
@@ -292,7 +292,7 @@ configured one yourself: an adapter you set up wins.
 
 RUN, TEST AND WATCH                                     *dotnet-tree-run*
 
-`r`, `t` and `w` open a terminal split that starts in the project's folder,
+`,r`, `,t` and `,w` open a terminal split that starts in the project's folder,
 not in Neovim's working directory: the default ASP.NET Core host reads
 appsettings.json from the directory it starts in. Neovim's own working
 directory does not change.
@@ -301,8 +301,8 @@ directory does not change.
 An Azure Functions app is one whose project file sets <AzureFunctionsVersion>
 or references Microsoft.NET.Sdk.Functions or
 Microsoft.Azure.Functions.Worker.Sdk, or whose folder has a host.json. It is
-started by the Functions host, so `r` needs Azure Functions Core Tools
-(`func`) on $PATH and says so when it is missing. What `r` runs depends on
+started by the Functions host, so `,r` needs Azure Functions Core Tools
+(`func`) on $PATH and says so when it is missing. What `,r` runs depends on
 the SDK the project references, with its version read the way the Packages
 node shows it (VersionOverride, then the project, then
 Directory.Packages.props):
@@ -315,11 +315,11 @@ Directory.Packages.props):
   (a $(Property))
 
 The major version is the first number written, so `1.*` and `[1.17,2.0)`
-count as 1.x. `w` → run does the same checks as `r`, and refuses an app that
-`r` starts with `func start`: `dotnet watch` cannot start its host.
+count as 1.x. `,w` → run does the same checks as `,r`, and refuses an app that
+`,r` starts with `func start`: `dotnet watch` cannot start its host.
 
 When AzureWebJobsStorage in local.settings.json contains
-`UseDevelopmentStorage=true`, `r` and `w` → run check that Azurite is
+`UseDevelopmentStorage=true`, `,r` and `,w` → run check that Azurite is
 listening on 127.0.0.1:10000 and warn when it is not. The warning is
 advisory and the app is started anyway: the host comes up, reports its
 storage unhealthy, and the triggers that need storage (timers, queues,
@@ -327,8 +327,9 @@ blobs) fail.
 
 NUGET.NVIM                                            *dotnet-tree-nuget*
 
-With nuget.nvim installed, `a` hands packages over to it instead of asking for
-a package name (https://github.com/alessandropietrobelli/nuget.nvim):
+With nuget.nvim installed, `,a` (and `a` on a package or on Packages) hands
+packages over to it instead of asking for a package name
+(https://github.com/alessandropietrobelli/nuget.nvim):
 
   - on a project's Packages node, it opens nuget.nvim's Browse tab, with that
     project already picked for the install;
@@ -336,8 +337,8 @@ a package name (https://github.com/alessandropietrobelli/nuget.nvim):
     project, a newer one, advisories, deprecation.
 
 Both use the solution selected in the tree. After nuget.nvim changes packages
-the tree reads the projects again and reloads. Without nuget.nvim, `a` works
-as before.
+the tree reads the projects again and reloads. Without nuget.nvim, it asks for
+a package name.
 
                                                *dotnet-tree-solution-folders*
 Solution folders, and the files they list (solution items), are edited from
@@ -366,22 +367,28 @@ the tree yet; its items are renamed, moved and taken off with the file
 operations below.
 
                                               *dotnet-tree-file-operations*
-Files and folders are renamed, moved, copied and deleted from the tree, and
-what each key does depends on what the node stands for:
+Files and folders are added, renamed, moved, copied and deleted on neo-tree's
+own keys, the same as in its filesystem source, and what each key does
+depends on what the node stands for:
 
-  <F2>  rename        a file or folder of a project, or a solution item
-  m     move          the same; the prompt takes a path, and a directory
-                      keeps the name
-  y x p copy, cut,    `p` on a folder, a file (its folder) or a project
-        paste         (its directory)
-  A     new folder    in the same place `p` pastes to
-  D     delete        a file or folder of a project, after asking. On a
+  a     add           a file of any kind, or a folder when the name ends in
+                      `/`, in a folder, next to a file or in a project. On
+                      Packages, Projects or one of their entries it adds one,
+                      as `,a`; on a solution folder, an existing file
+  A     add folder    in the same place
+  d     delete        a file or folder of a project, after asking. On a
                       package, a project reference or a project it runs
                       `dotnet remove ... package`, `dotnet remove ...
                       reference` or `dotnet sln remove`, after asking; the
                       project's files stay on disk. On a solution item it
                       takes the file off its solution folder and leaves the
                       file where it is
+  r     rename        a file or folder of a project, or a solution item
+  b     rename        the same, keeping the extension
+  m     move          the prompt takes a path; a directory keeps the name
+  c     copy          the same, copying
+  y x p copy, cut,    `p` on a folder, a file (its folder) or a project
+        paste         (its directory)
 
 A renamed or moved solution item keeps its place in the solution: the new path
 is written in the solution file. The rest is refused with the reason: the
@@ -401,6 +408,10 @@ installed, that plugin does this instead.
 5. MAPPINGS                                         *dotnet-tree-mappings*
 
 Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
+Files and folders use neo-tree's own keys, as in its filesystem source; the
+.NET actions are under `,`, which neo-tree does not use. neo-tree's other
+defaults (s, S and t to open in a split or a tab, P preview, q close...) work
+as in its other sources.
 
   <cr>, o, 2-LeftMouse   open node
   <space>                toggle node
@@ -408,36 +419,57 @@ Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
   z                      close all nodes
   Z                      expand all nodes
   ?                      show help
-  s                      select solution
-  e                      edit the project's .csproj
-  a                      add package or project reference (packages open
-                         nuget.nvim when it is installed:
-                         |dotnet-tree-nuget|); on a solution folder, add an
-                         existing file to it (|dotnet-tree-solution-folders|)
-  n                      new file from template; on the solution, a new
-                         solution folder; on a solution folder, a new file
-                         in it or a subfolder
-  b                      build project        -> quickfix
-  B                      build solution       -> quickfix
-  c                      clean project        -> quickfix
-  C                      clean solution       -> quickfix
-  r                      run project          -> terminal
-  d                      debug project        -> nvim-dap
-  L                      choose the launch profile for r, d and w -> run
-                         (|dotnet-tree-launch-profile|)
-  <F2>                   rename a file or folder
-  m                      move a file or folder
-  y / x / p              copy / cut / paste a file or folder
-  A                      new folder
-  D                      delete; on a package, a project reference or a
+
+Files and folders (|dotnet-tree-file-operations|):
+
+  a                      add a file, or a folder ending in /; on Packages or
+                         Projects, add one; on a solution folder, an
+                         existing file (|dotnet-tree-solution-folders|)
+  A                      add a folder
+  n                      new .cs file from a template, in the namespace of
+                         its folder; on the solution, a new solution folder;
+                         on a solution folder, a new file in it or a
+                         subfolder
+  d                      delete; on a package, a project reference or a
                          project, remove it with dotnet; on a solution item,
                          take it off its folder
-                         (|dotnet-tree-file-operations|)
-  t                      test project         -> terminal
-  w                      watch (run / test / build)  -> terminal
+  r / b                  rename / rename keeping the extension
+  m / c                  move / copy to a path
+  y / x / p              copy / cut / paste
 
+.NET:
+
+  ,s                     select solution
+  ,e                     edit the project's .csproj
+  ,a                     add package or project reference (packages open
+                         nuget.nvim when it is installed:
+                         |dotnet-tree-nuget|)
+  ,b                     build project        -> quickfix
+  ,B                     build solution       -> quickfix
+  ,c                     clean project        -> quickfix
+  ,C                     clean solution       -> quickfix
+  ,r                     run project          -> terminal
+  ,d                     debug project        -> nvim-dap
+  ,t                     test project         -> terminal
+  ,w                     watch (run / test / build)  -> terminal
+  ,l                     choose the launch profile for ,r, ,d and ,w -> run
+                         (|dotnet-tree-launch-profile|)
+
+The keys of 0.3 and earlier can be mapped back in the source's options: >lua
+
+  ["dotnet-tree"] = {
+    window = {
+      mappings = {
+        s = "select_solution", e = "edit_project_file",
+        a = "add_package_or_reference", b = "build", B = "build_solution",
+        c = "clean", C = "clean_solution", r = "run_project", d = "debug",
+        t = "test", w = "watch",
+      },
+    },
+  },
+<
 See |dotnet-tree-quickfix| for what the build actions do with their output,
-and |dotnet-tree-debug| for `d`.
+and |dotnet-tree-debug| for `,d`.
 
 ==============================================================================
 6. CONFIGURATION                               *dotnet-tree-configuration*
@@ -474,11 +506,11 @@ registered in neo-tree's sources, that `dotnet` is executable, and which
 solutions are discoverable from the current working directory.
 
 It also reports whether debugging is available — nvim-dap installed and
-netcoredbg found — as a warning rather than an error: only `d` needs them.
+netcoredbg found — as a warning rather than an error: only `,d` needs them.
 See |dotnet-tree-debug|.
 
 For each solution it also warns when the file cannot be read, or lists a
-project that is not on disk: `r`, `t` and `w` cannot run one.
+project that is not on disk: `,r`, `,t` and `,w` cannot run one.
 
 When a solution found there has an Azure Functions app, it reports whether
 `func` is on $PATH and, if an app uses `UseDevelopmentStorage=true`, whether
@@ -499,7 +531,7 @@ dotnet-tree", or ":Neotree" is not an editor command
 
 "[dotnet-tree] no .sln/.slnx found under <path>"
     No solution below the current working directory. Start Neovim at the
-    repository root, or press `s` to select one explicitly.
+    repository root, or press `,s` to select one explicitly.
 
 ==============================================================================
 9. SEE ALSO                                         *dotnet-tree-see-also*

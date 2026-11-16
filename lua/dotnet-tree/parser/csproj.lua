@@ -13,25 +13,8 @@ function M.invalidate(path)
   end
 end
 
--- An MSBuild property is whatever the last unconditional assignment says. A
--- `Condition` we cannot evaluate is skipped rather than guessed at, so a
--- property declared only conditionally reads as nil -- unknown -- and the
--- caller decides what to do about it. The value itself is returned as written:
--- a `$(Property)` reference is not expanded here, same as everywhere else in
--- this parser.
-local function read_property(root, name)
-  local value = nil
-  for _, group in ipairs(xml.find_all(root, "PropertyGroup")) do
-    if xml.attr_ci(group.attrs, "Condition") == nil then
-      for _, node in ipairs(group.children) do
-        if node.tag == name and xml.attr_ci(node.attrs, "Condition") == nil and node.text ~= "" then
-          value = node.text
-        end
-      end
-    end
-  end
-  return value
-end
+-- See props.property: the last unconditional assignment, as written
+local read_property = props.property
 
 -- MSBuild booleans are the strings "true" and "false", compared without regard
 -- to case. Anything else -- an unevaluated property, a typo -- is not a
@@ -187,6 +170,9 @@ function M.parse(csproj_path)
   -- basename, and the caller is the one that knows which it is looking at.
   result.output_type = read_property(root, "OutputType")
   result.assembly_name = read_property(root, "AssemblyName")
+  -- The namespace `n` starts a new file's from: the project's own, else the
+  -- one Directory.Build.props sets for every project, as written
+  result.root_namespace = read_property(root, "RootNamespace") or props.inherited_root_namespace(dir)
 
   -- The SDK is what makes `output_type == nil` readable: nil means "the project
   -- did not say", and only the SDK says what that amounts to.
