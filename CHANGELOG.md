@@ -18,6 +18,12 @@ mappings may land in a minor release; they will always be listed here.
   without a question
   ([#51](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/51)).
 
+- Solution folders can be edited from the tree: `n` on the solution creates
+  one, `n` on a solution folder creates a file in its directory and adds it, or
+  a subfolder, and `a` on a solution folder adds an existing file. `.sln` and
+  `.slnx` are written in place, keeping line endings, BOM and indentation
+  ([#66](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/66)).
+
 ### Changed
 
 - A `launchSettings.json` with comments or trailing commas, which `dotnet`

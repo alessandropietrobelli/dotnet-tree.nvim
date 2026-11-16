@@ -245,9 +245,187 @@ local function add_reference(state, csproj_path)
   end)
 end
 
+-- ─── solution folders (#66) ────────────────────────────────────────────────
+
+-- The solution, or the solution folder `n` and `a` act on: the folder under the
+-- cursor, or the one a solution item under the cursor is listed in.
+---@return table|nil { guid = folder guid or nil for the solution itself }
+local function solution_target(state)
+  local node = state.tree:get_node()
+  local extra = node and node.extra or {}
+  if extra.kind == "solution" then
+    return {}
+  elseif extra.kind == "sln_folder" then
+    return { guid = extra.guid }
+  elseif extra.kind == "file" and extra.sln_folder then
+    return { guid = extra.sln_folder }
+  end
+end
+
+local function warn(message)
+  vim.notify("[dotnet-tree] " .. message, vim.log.levels.WARN)
+end
+
+-- The solution as it is on disk now, and the folder `guid` in it
+local function load_solution(state, guid)
+  if not state.dotnet_sln then
+    warn("no solution loaded")
+    return nil
+  end
+  local solution = require("dotnet-tree.parser.solution")
+  solution.invalidate(state.dotnet_sln)
+  local sln, err = solution.parse(state.dotnet_sln)
+  if not sln then
+    warn(tostring(err))
+    return nil
+  end
+  local folder = guid and sln.by_guid[guid]
+  if guid and not folder then
+    warn("that solution folder is no longer in the solution file; press R")
+    return nil
+  end
+  return sln, folder
+end
+
+-- Names of the folders directly under `folder`, or at the root
+local function folder_names(sln, folder)
+  local names = {}
+  for _, entry in ipairs(sln.projects) do
+    if entry.kind == "folder" and entry.parent_guid == (folder and folder.guid or nil) then
+      table.insert(names, entry.name)
+    end
+  end
+  return names
+end
+
+-- Build the tree again from the file, then put the cursor on node `id`
+local function show(state, id)
+  local ok = pcall(function()
+    require("neo-tree.sources.manager").navigate(state, state.path, nil, function()
+      pcall(require("dotnet-tree.reveal").focus, state, id)
+    end)
+  end)
+  if not ok then
+    require("dotnet-tree.refresh").rebuild()
+  end
+end
+
+local function folder_id(sln_path, id)
+  local is_slnx = sln_path:lower():match("%.slnx$") ~= nil
+  return "dotnet:slnfolder:" .. (is_slnx and ("slnxfolder:" .. id) or id)
+end
+
+local function new_solution_folder(state, sln, parent)
+  local where = parent and parent.name or vim.fn.fnamemodify(state.dotnet_sln, ":t")
+  vim.ui.input({ prompt = ("New solution folder in %s: "):format(where) }, function(name)
+    if not name or vim.trim(name) == "" then
+      return
+    end
+    local ok, err, id =
+      require("dotnet-tree.solution_edit").add_folder(state.dotnet_sln, parent, name, folder_names(sln, parent))
+    if not ok then
+      warn(err)
+      return
+    end
+    show(state, folder_id(state.dotnet_sln, id))
+  end)
+end
+
+-- Ask for a path, starting in the folder's directory on disk, with completion
+local function ask_path(prompt, sln, folder, cb)
+  local dir = require("dotnet-tree.solution_edit").directory(sln, folder)
+  local default = vim.fn.fnamemodify(dir, ":~:.")
+  if default ~= "" and default:sub(-1) ~= "/" then
+    default = default .. "/"
+  end
+  vim.ui.input({ prompt = prompt, default = default, completion = "file" }, function(input)
+    if not input or vim.trim(input) == "" then
+      return
+    end
+    cb(vim.fs.normalize(vim.fn.fnamemodify(vim.fn.expand(vim.trim(input)), ":p")))
+  end)
+end
+
+local function add_to_folder(state, folder, path)
+  local ok, err = require("dotnet-tree.solution_edit").add_file(state.dotnet_sln, folder, path)
+  if not ok then
+    warn(err)
+    return false
+  end
+  show(state, "dotnet:slnitem:" .. folder.guid .. ":" .. path)
+  return true
+end
+
+local function new_solution_item(state, sln, folder)
+  ask_path(("New file in %s: "):format(folder.name), sln, folder, function(path)
+    if path:sub(-1) == "/" or vim.fn.isdirectory(path) == 1 then
+      warn("give the file a name")
+      return
+    end
+    if vim.uv.fs_stat(path) then
+      warn(("%s already exists: press `a` to add it to %s"):format(vim.fn.fnamemodify(path, ":~:."), folder.name))
+      return
+    end
+    vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+    vim.fn.writefile({}, path)
+    if not add_to_folder(state, folder, path) then
+      -- Not in the solution: do not leave a stray empty file behind
+      os.remove(path)
+      return
+    end
+    -- In an editor window, as `<cr>` opens a file, not in the tree's
+    local opened = pcall(require("neo-tree.utils").open_file, state, path)
+    if not opened then
+      vim.cmd("edit " .. vim.fn.fnameescape(path))
+    end
+  end)
+end
+
+--- `n` on the solution or a solution folder.
+local function solution_new(state, target)
+  local sln, folder = load_solution(state, target.guid)
+  if not sln then
+    return
+  end
+  if not folder then
+    new_solution_folder(state, sln, nil)
+    return
+  end
+  vim.ui.select({ "file", "solution folder" }, { prompt = ("New in %s:"):format(folder.name) }, function(choice)
+    if choice == "file" then
+      new_solution_item(state, sln, folder)
+    elseif choice == "solution folder" then
+      new_solution_folder(state, sln, folder)
+    end
+  end)
+end
+
+--- `a` on a solution folder: add a file that exists.
+local function solution_add(state, target)
+  local sln, folder = load_solution(state, target.guid)
+  if not sln then
+    return
+  end
+  ask_path(("Add file to %s: "):format(folder.name), sln, folder, function(path)
+    if vim.fn.filereadable(path) == 0 then
+      warn(("no file at %s"):format(vim.fn.fnamemodify(path, ":~:.")))
+      return
+    end
+    add_to_folder(state, folder, path)
+  end)
+end
+
 function M.add(state)
   local node = state.tree:get_node()
   if not node then
+    return
+  end
+  local target = solution_target(state)
+  if target and target.guid then
+    solution_add(state, target)
+    return
+  elseif target then
+    warn("`a` adds a file to a solution folder; `n` on the solution creates one")
     return
   end
   local proj_node = find_project_node(state)
@@ -325,6 +503,11 @@ local function compute_namespace(target_dir, proj_path)
 end
 
 function M.new_file(state)
+  local target = solution_target(state)
+  if target then
+    solution_new(state, target)
+    return
+  end
   local proj_node = find_project_node(state)
   if not proj_node or not proj_node.extra.project or not proj_node.extra.project.path then
     vim.notify("[dotnet-tree] not in a project", vim.log.levels.WARN)

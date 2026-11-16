@@ -178,7 +178,8 @@ local function make_solution_item_node(item, owner_guid)
     name = vim.fn.fnamemodify(item.path, ":t"),
     type = "file",
     path = item.path,
-    extra = { kind = "file" },
+    -- The folder it is listed in, so `n` and `a` on it act on that folder (#66)
+    extra = { kind = "file", sln_folder = owner_guid },
   }
 end
 
@@ -215,7 +216,7 @@ local function build_folder_node(folder, sln)
     id = "dotnet:slnfolder:" .. folder.guid,
     name = folder.name,
     type = "directory",
-    extra = { kind = "sln_folder" },
+    extra = { kind = "sln_folder", guid = folder.guid },
     children = children,
   }
 end

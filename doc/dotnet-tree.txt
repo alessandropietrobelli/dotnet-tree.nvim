@@ -339,6 +339,26 @@ Both use the solution selected in the tree. After nuget.nvim changes packages
 the tree reads the projects again and reloads. Without nuget.nvim, `a` works
 as before.
 
+                                               *dotnet-tree-solution-folders*
+Solution folders, and the files they list (solution items), are edited from
+the tree. `dotnet sln` only manages projects, so the solution file is written
+in place: only the lines that change are touched, and its line endings, BOM
+and indentation stay as they were.
+
+  n on the solution        asks for a name and creates a solution folder
+  n on a solution folder   asks whether to create a file or a subfolder. For
+                           a file the prompt starts in the folder's directory
+                           on disk — the one its files share, or
+                           <solution dir>/<folder> when it has none — so only
+                           the name is left to type. The file is created,
+                           added to the folder and opened
+  a on a solution folder   adds a file that already exists, with completion
+
+On a file listed in a solution folder, `n` and `a` act on that folder. A
+solution file with unsaved changes in a buffer is not written over: save or
+discard them first. Removing items and renaming or deleting folders come with
+the file operations in a later release.
+
 ==============================================================================
 5. MAPPINGS                                         *dotnet-tree-mappings*
 
@@ -352,10 +372,14 @@ Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
   ?                      show help
   s                      select solution
   e                      edit the project's .csproj
-  a                      add package or project reference
+  a                      add package or project reference;
+                         on a solution folder, add an existing file to it
+                         (|dotnet-tree-solution-folders|)
                          (packages open nuget.nvim when it is installed:
                          |dotnet-tree-nuget|)
-  n                      new file from template
+  n                      new file from template; on the solution, a new
+                         solution folder; on a solution folder, a new file
+                         in it or a subfolder
   b                      build project        -> quickfix
   B                      build solution       -> quickfix
   c                      clean project        -> quickfix
