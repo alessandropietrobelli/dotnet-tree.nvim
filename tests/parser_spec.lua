@@ -690,9 +690,19 @@ describe("parser.launch_settings", function()
 
   -- vim.json.decode rejects both comments and a trailing comma, and real
   -- launchSettings.json files carry them -- easy-dotnet.nvim maps the filename
-  -- to json5. An unreadable file has to leave `d` as it was, not raise.
-  it("returns nothing for a file it cannot decode", function()
-    assert.is_nil(read("Json5"))
+  -- to json5. `dotnet` reads them, so they are read here too (#51).
+  it("reads a file with a comment and a trailing comma", function()
+    local settings, name = read("Json5")
+    assert.are.equal("http", name)
+    assert.are.equal("Development", settings.env.ASPNETCORE_ENVIRONMENT)
+  end)
+
+  -- A file that still cannot be decoded has to leave `d` as it was, not raise
+  it("returns nothing, and why, for a file it cannot decode", function()
+    local settings, name, err = read("Broken")
+    assert.is_nil(settings)
+    assert.is_nil(name)
+    assert.matches("cannot read", err, 1, true)
   end)
 
   -- Docker and IIS Express start something that is not the assembly `d` built.

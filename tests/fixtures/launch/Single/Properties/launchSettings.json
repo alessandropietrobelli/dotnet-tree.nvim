@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Single": {
+      "commandName": "Project",
+      "environmentVariables": { "DOTNET_ENVIRONMENT": "Development" }
+    },
+    "IIS Express": {
+      "commandName": "IISExpress"
+    }
+  }
+}

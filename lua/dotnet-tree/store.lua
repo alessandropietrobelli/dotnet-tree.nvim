@@ -7,6 +7,12 @@ local function file_path(name)
   return vim.fn.stdpath("state") .. "/dotnet-tree/" .. name
 end
 
+local function notify(message)
+  vim.notify("[dotnet-tree] " .. message, vim.log.levels.WARN)
+end
+
+-- A file that cannot be read is moved aside rather than written over on the
+-- next save, which would lose every other entry in it without a word.
 local function read(name)
   local p = file_path(name)
   if vim.fn.filereadable(p) == 0 then
@@ -14,16 +20,26 @@ local function read(name)
   end
   local content = table.concat(vim.fn.readfile(p), "\n")
   local ok, data = pcall(vim.json.decode, content)
-  if not ok or type(data) ~= "table" then
-    return {}
+  if ok and type(data) == "table" then
+    return data
   end
-  return data
+  local aside = p .. ".bak"
+  os.rename(p, aside)
+  notify(("%s could not be read and was moved to %s; what it remembered is asked again"):format(p, aside))
+  return {}
 end
 
+---@return boolean ok
+---@return string|nil err
 local function write(name, data)
   local p = file_path(name)
-  vim.fn.mkdir(vim.fn.fnamemodify(p, ":h"), "p")
-  vim.fn.writefile({ vim.json.encode(data) }, p)
+  return pcall(function()
+    vim.fn.mkdir(vim.fn.fnamemodify(p, ":h"), "p")
+    -- Written next to it and renamed over it, so a crash halfway leaves the old file
+    local tmp = p .. ".tmp"
+    vim.fn.writefile({ vim.json.encode(data) }, tmp)
+    assert(os.rename(tmp, p))
+  end)
 end
 
 local SOLUTIONS = "solutions.json"
@@ -36,7 +52,10 @@ end
 function M.set(cwd, sln_path)
   local data = read(SOLUTIONS)
   data[vim.fs.normalize(cwd)] = vim.fs.normalize(sln_path)
-  write(SOLUTIONS, data)
+  local ok, err = write(SOLUTIONS, data)
+  if not ok then
+    notify("could not remember the solution chosen: " .. tostring(err))
+  end
 end
 
 --- The launch profile chosen for a project, if any.
@@ -49,10 +68,12 @@ end
 
 ---@param project_path string
 ---@param name string
+---@return boolean ok
+---@return string|nil err why it could not be remembered
 function M.set_profile(project_path, name)
   local data = read(PROFILES)
   data[vim.fs.normalize(project_path)] = name
-  write(PROFILES, data)
+  return write(PROFILES, data)
 end
 
 return M

@@ -1,0 +1,6 @@
+{
+  "profiles": {
+    "http": { "commandName": "Project" }
+    "https": { "commandName": "Project" }
+  }
+}

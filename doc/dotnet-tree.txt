@@ -224,10 +224,16 @@ which one the first time `r`, `d` or `w` → run starts it, with the first in
 the file, the one `dotnet run` picks by default, marked as such. The choice is
 remembered for that project across sessions, and `r` and `w` → run pass it to
 `dotnet` as `--launch-profile`. `L` on the project asks again. If the file no
-longer has the profile chosen, the question comes back.
-A project with no launchSettings.json, or one whose file cannot be parsed as
-strict JSON, is launched exactly as it was before — the file is a source of
-extra information, never a reason to refuse.
+longer has the profile chosen, the question comes back; if it is left with
+one profile or none, a message says the choice is no longer used. `d` asks
+after it has checked the project can be launched, and before the build. An
+in-process or Worker SDK 1.x function app, which `r` starts with `func start`,
+reads no profile and asks nothing.
+
+Comments and trailing commas are read, as `dotnet` reads them. A project with
+no launchSettings.json is launched exactly as it was before. One whose file
+cannot be read at all is launched that way too, with a message saying why —
+the file is a source of extra information, never a reason to refuse.
 
 MSBuild is not evaluated here either: a value written as $(Property) is
 dropped rather than exported verbatim.

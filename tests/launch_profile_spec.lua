@@ -13,23 +13,75 @@ describe("parser.launch_settings names and read by name", function()
       { "zzz-first-in-file", "Ordered", "aaa-alphabetically-first" },
       launch_settings.names(LAUNCH .. "/Ordered")
     )
+    assert.are.same({ "Single" }, launch_settings.names(LAUNCH .. "/Single"))
     assert.are.same({}, launch_settings.names(LAUNCH .. "/NoProject"))
     assert.are.same({}, launch_settings.names(root .. "/fixtures"))
   end)
 
-  it("reads the profile asked for, and nothing for one the file does not have", function()
+  it("reads the profile asked for, and says so when the file does not have it", function()
     local settings, name = launch_settings.read(LAUNCH .. "/Webapi", "https")
     assert.are.equal("https", name)
     assert.are.equal("https://localhost:7135;http://localhost:5135", settings.env.ASPNETCORE_URLS)
-    assert.is_nil(launch_settings.read(LAUNCH .. "/Webapi", "IIS Express"))
-    assert.is_nil(launch_settings.read(LAUNCH .. "/Webapi", "gone"))
+    for _, missing in ipairs({ "IIS Express", "gone" }) do
+      local none, none_name, err = launch_settings.read(LAUNCH .. "/Webapi", missing)
+      assert.is_nil(none)
+      assert.is_nil(none_name)
+      assert.matches(missing, err, 1, true)
+    end
+  end)
+
+  it("names the default the same way read picks it", function()
+    for _, dir in ipairs({ "Webapi", "Ordered", "Single" }) do
+      local _, name = launch_settings.read(LAUNCH .. "/" .. dir)
+      assert.are.equal(launch_settings.names(LAUNCH .. "/" .. dir)[1], name)
+    end
+  end)
+
+  -- `dotnet` reads comments and trailing commas, and Visual Studio writes them
+  it("reads a file with comments and trailing commas", function()
+    local settings, name = launch_settings.read(LAUNCH .. "/Json5")
+    assert.are.equal("http", name)
+    assert.are.equal("Development", settings.env.ASPNETCORE_ENVIRONMENT)
+    local text = launch_settings.strip_jsonc(table.concat({
+      "{ // a comment",
+      '  "url": "http://localhost:5000", /* a block',
+      "     comment */",
+      '  "odd": "a // b, }",',
+      '  "list": [1, 2, // last',
+      "  ],",
+      "}",
+    }, "\n"))
+    assert.are.same({ url = "http://localhost:5000", odd = "a // b, }", list = { 1, 2 } }, vim.json.decode(text))
+  end)
+
+  it("says why a file it still cannot read gives no profile", function()
+    local names, err = launch_settings.names(LAUNCH .. "/Broken")
+    assert.are.same({}, names)
+    assert.matches("launchSettings.json", err, 1, true)
+    local settings, _, read_err = launch_settings.read(LAUNCH .. "/Broken")
+    assert.is_nil(settings)
+    assert.are.equal(err, read_err)
+  end)
+
+  -- A profile that declares nothing still is the profile in use: `d` names it
+  it("reads a profile that declares nothing as an empty one, not as none", function()
+    local root_dir = vim.fn.tempname()
+    vim.fn.mkdir(root_dir .. "/Properties", "p")
+    vim.fn.writefile(
+      { '{ "profiles": { "bare": { "commandName": "Project" } } }' },
+      root_dir .. "/Properties/launchSettings.json"
+    )
+    local settings, name = launch_settings.read(root_dir)
+    assert.are.same({}, settings)
+    assert.are.equal("bare", name)
+    vim.fn.delete(root_dir, "rf")
   end)
 end)
 
 describe("launch profile choice", function()
   local store = require("dotnet-tree.store")
-  local launch_profile = require("dotnet-tree.launch_profile")
-  local saved, remembered, asked, answer, messages
+  local launch_profile
+  local saved, remembered, asked, answers, messages, write_fails
 
   local function stub(tbl, key, value)
     table.insert(saved, { tbl = tbl, key = key, value = tbl[key] })
@@ -37,23 +89,33 @@ describe("launch profile choice", function()
   end
 
   local WEBAPI = LAUNCH .. "/Webapi/Webapi.csproj"
+  local SINGLE = LAUNCH .. "/Single/Single.csproj"
 
   before_each(function()
     saved, remembered, asked, messages = {}, {}, {}, {}
-    answer = "https"
+    -- One answer per question, in order: which question got which shows
+    answers = { "https" }
+    write_fails = false
     stub(store, "get_profile", function(path)
       return remembered[path]
     end)
     stub(store, "set_profile", function(path, name)
+      if write_fails then
+        return false, "E482: Can't create file"
+      end
       remembered[path] = name
+      return true
     end)
     stub(vim.ui, "select", function(items, opts, on_choice)
       table.insert(asked, vim.tbl_map(opts.format_item or tostring, items))
-      on_choice(answer)
+      on_choice(table.remove(answers, 1))
     end)
-    stub(vim, "notify", function(msg)
-      table.insert(messages, msg)
+    stub(vim, "notify", function(msg, level)
+      table.insert(messages, { msg = msg, level = level })
     end)
+    -- What was said once is said once per module load
+    package.loaded["dotnet-tree.launch_profile"] = nil
+    launch_profile = require("dotnet-tree.launch_profile")
   end)
 
   after_each(function()
@@ -77,33 +139,69 @@ describe("launch profile choice", function()
     assert.are.equal("https", remembered[WEBAPI])
   end)
 
+  it("marks the first in the file as the default, not the first alphabetically", function()
+    answers = { "Ordered" }
+    choose(LAUNCH .. "/Ordered/Ordered.csproj")
+    assert.are.equal("zzz-first-in-file (default)", asked[1][1])
+  end)
+
   it("asks nothing for a project with one profile or none", function()
+    assert.is_nil(choose(SINGLE))
     assert.is_nil(choose(LAUNCH .. "/NoProject/NoProject.csproj"))
     assert.is_nil(choose(root .. "/fixtures/Nothing.csproj"))
     assert.are.same({}, asked)
+    assert.are.same({}, messages)
   end)
 
   it("asks again when the file no longer has the profile chosen", function()
     remembered[WEBAPI] = "renamed-since"
-    answer = "http"
+    answers = { "http" }
     assert.are.equal("http", choose(WEBAPI))
     assert.are.equal(1, #asked)
   end)
 
+  it("says once that a choice made before is not used any more", function()
+    remembered[SINGLE] = "https"
+    assert.is_nil(choose(SINGLE))
+    assert.is_nil(choose(SINGLE))
+    assert.are.equal(1, #messages)
+    assert.matches('"https" chosen for Single is not used: only "Single"', messages[1].msg, 1, true)
+    assert.are.equal(vim.log.levels.WARN, messages[1].level)
+  end)
+
+  it("says once why a file it cannot read offers no choice", function()
+    local broken = LAUNCH .. "/Broken/Broken.csproj"
+    assert.is_nil(choose(broken))
+    assert.is_nil(choose(broken))
+    assert.are.equal(1, #messages)
+    assert.matches("cannot read", messages[1].msg, 1, true)
+    assert.matches("default", messages[1].msg, 1, true)
+  end)
+
+  it("starts anyway when the choice cannot be remembered, and says so", function()
+    write_fails = true
+    assert.are.equal("https", choose(WEBAPI))
+    assert.matches("could not remember the launch profile", messages[1].msg, 1, true)
+  end)
+
   it("does not go on when the question is cancelled", function()
-    answer = nil
+    answers = {}
     assert.are.equal("not called", choose(WEBAPI))
     assert.is_nil(remembered[WEBAPI])
   end)
 
   it("asks again with L, and says when there is nothing to choose", function()
     remembered[WEBAPI] = "https"
-    answer = "http"
+    answers = { "http" }
     launch_profile.pick(WEBAPI)
     assert.are.equal("http", remembered[WEBAPI])
-    assert.matches('starts with launch profile "http"', messages[1])
+    assert.matches('starts with launch profile "http"', messages[1].msg, 1, true)
+    launch_profile.pick(SINGLE)
+    assert.matches('one launch profile, "Single": there is nothing to choose', messages[2].msg, 1, true)
     launch_profile.pick(LAUNCH .. "/NoProject/NoProject.csproj")
-    assert.matches("no launch profile", messages[2])
+    assert.matches("no launch profile", messages[3].msg, 1, true)
+    launch_profile.pick(LAUNCH .. "/Broken/Broken.csproj")
+    assert.matches("cannot read", messages[4].msg, 1, true)
     assert.are.equal(1, #asked)
   end)
 
@@ -136,7 +234,7 @@ describe("launch profile choice", function()
         table.insert(opened, cmd)
       end)
       stub(require("dotnet-tree.debug"), "debug", function(path, opts)
-        table.insert(debugged, { path = path, profile = opts and opts.profile })
+        table.insert(debugged, { path = path, opts = opts })
       end)
       commands = require("dotnet-tree.commands")
     end)
@@ -147,8 +245,8 @@ describe("launch profile choice", function()
     end)
 
     it("runs and watches with the profile chosen, asked once for both", function()
+      answers = { "https", "run" }
       commands.run_project(state_on(WEBAPI))
-      answer = "run" -- the watch menu
       commands.watch(state_on(WEBAPI))
       local suffix = " --launch-profile " .. vim.fn.shellescape("https")
       assert.are.same({
@@ -158,21 +256,63 @@ describe("launch profile choice", function()
       assert.are.equal(2, #asked, "the profile once, then the watch menu")
     end)
 
+    it("does not ask for a profile to watch tests or a build", function()
+      for _, what in ipairs({ "test", "build" }) do
+        answers = { what }
+        commands.watch(state_on(WEBAPI))
+      end
+      assert.are.same({
+        "dotnet watch test --project " .. vim.fn.shellescape(WEBAPI),
+        "dotnet watch build --project " .. vim.fn.shellescape(WEBAPI),
+      }, opened)
+      assert.are.equal(2, #asked, "only the watch menu, twice")
+    end)
+
     it("runs as before when there is nothing to choose", function()
-      local path = LAUNCH .. "/NoProject/NoProject.csproj"
-      commands.run_project(state_on(path))
-      assert.are.same({ "dotnet run --project " .. vim.fn.shellescape(path) }, opened)
+      commands.run_project(state_on(SINGLE))
+      assert.are.same({ "dotnet run --project " .. vim.fn.shellescape(SINGLE) }, opened)
       assert.are.same({}, asked)
     end)
 
-    it("debugs with the profile chosen, asked before the build", function()
+    it("starts nothing when the question is cancelled", function()
+      answers = {}
+      commands.run_project(state_on(WEBAPI))
+      assert.are.same({}, opened)
+    end)
+
+    -- `func start` reads no launch profile: asking would be a question for nothing
+    it("does not ask on r for a function app started with func start", function()
+      local dir = vim.fn.tempname()
+      vim.fn.mkdir(dir .. "/Properties", "p")
+      vim.fn.writefile(
+        vim.fn.readfile(root .. "/fixtures/functions/InProcess/InProcess.csproj"),
+        dir .. "/InProcess.csproj"
+      )
+      vim.fn.writefile(
+        vim.fn.readfile(LAUNCH .. "/Webapi/Properties/launchSettings.json"),
+        dir .. "/Properties/launchSettings.json"
+      )
+      stub(vim.fn, "executable", function()
+        return 1
+      end)
+      stub(require("dotnet-tree.functions"), "warn_without_azurite", function() end)
+      commands.run_project(state_on(dir .. "/InProcess.csproj"))
+      assert.are.same({ "func start" }, opened)
+      assert.are.same({}, asked)
+      vim.fn.delete(dir, "rf")
+    end)
+
+    -- The question itself is asked inside debug.debug, after the project has
+    -- been checked: see debug_spec
+    it("leaves the profile of d to the debugger", function()
       commands.debug(state_on(WEBAPI))
-      assert.are.same({ { path = WEBAPI, profile = "https" } }, debugged)
+      assert.are.same({ { path = WEBAPI } }, debugged)
+      assert.are.same({}, asked)
     end)
 
     it("chooses again with L", function()
       remembered[WEBAPI] = "https"
-      answer = "http"
+      answers = { "http" }
       commands.choose_launch_profile(state_on(WEBAPI))
       assert.are.equal("http", remembered[WEBAPI])
     end)
@@ -180,24 +320,58 @@ describe("launch profile choice", function()
 end)
 
 describe("store of launch profiles", function()
-  it("keeps the choice per project, next to the solutions", function()
-    local store = require("dotnet-tree.store")
-    local state = vim.fn.tempname()
-    local stdpath = vim.fn.stdpath
+  local store = require("dotnet-tree.store")
+  local state, stdpath, messages, notify
+
+  before_each(function()
+    state = vim.fn.tempname()
+    stdpath, notify, messages = vim.fn.stdpath, vim.notify, {}
     vim.fn.stdpath = function(what)
       return what == "state" and state or stdpath(what)
     end
-    local ok, err = pcall(function()
-      store.set_profile("/src/Api/Api.csproj", "https")
-      store.set_profile("/src/Web/Web.csproj", "http")
-      store.set("/src", "/src/All.sln")
-      assert.are.equal("https", store.get_profile("/src/Api/Api.csproj"))
-      assert.are.equal("http", store.get_profile("/src/Web/Web.csproj"))
-      assert.is_nil(store.get_profile("/src/Other/Other.csproj"))
-      assert.are.equal("/src/All.sln", store.get("/src"))
-    end)
-    vim.fn.stdpath = stdpath
+    vim.notify = function(msg)
+      table.insert(messages, msg)
+    end
+  end)
+
+  after_each(function()
+    vim.fn.stdpath, vim.notify = stdpath, notify
     vim.fn.delete(state, "rf")
-    assert(ok, err)
+  end)
+
+  it("keeps the choice per project, next to the solutions", function()
+    assert.is_true(store.set_profile("/src/Api//Api.csproj", "https"))
+    store.set_profile("/src/Web/Web.csproj", "http")
+    store.set("/src", "/src/All.sln")
+    assert.are.equal("https", store.get_profile("/src/Api/Api.csproj"), "the path is normalized")
+    assert.are.equal("http", store.get_profile("/src/Web/Web.csproj"))
+    assert.is_nil(store.get_profile("/src/Other/Other.csproj"))
+    assert.are.equal("/src/All.sln", store.get("/src"))
+  end)
+
+  it("ignores a value that is not a profile name", function()
+    vim.fn.mkdir(state .. "/dotnet-tree", "p")
+    vim.fn.writefile({ '{"/src/Api/Api.csproj": 3}' }, state .. "/dotnet-tree/launch_profiles.json")
+    assert.is_nil(store.get_profile("/src/Api/Api.csproj"))
+  end)
+
+  -- Writing over it would lose every other project's choice without a word
+  it("moves a file it cannot read aside instead of writing over it", function()
+    local file = state .. "/dotnet-tree/launch_profiles.json"
+    vim.fn.mkdir(state .. "/dotnet-tree", "p")
+    vim.fn.writefile({ '{"/src/Api/Api.csproj": "ht' }, file)
+    assert.is_nil(store.get_profile("/src/Api/Api.csproj"))
+    assert.are.equal(1, vim.fn.filereadable(file .. ".bak"))
+    assert.matches("could not be read", messages[1], 1, true)
+    store.set_profile("/src/Web/Web.csproj", "http")
+    assert.are.equal("http", store.get_profile("/src/Web/Web.csproj"))
+    assert.are.same({ '{"/src/Api/Api.csproj": "ht' }, vim.fn.readfile(file .. ".bak"))
+  end)
+
+  it("reports a choice it cannot write instead of raising", function()
+    vim.fn.writefile({ "a file where the directory should be" }, state)
+    local ok, err = store.set_profile("/src/Api/Api.csproj", "https")
+    assert.is_false(ok)
+    assert.truthy(err)
   end)
 end)

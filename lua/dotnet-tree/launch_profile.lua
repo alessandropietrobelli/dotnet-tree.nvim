@@ -1,11 +1,11 @@
 -- Which launch profile `r`, `d` and `w` → run start a project with (#51).
 --
--- `dotnet run` uses the first profile in `Properties/launchSettings.json`
--- unless told otherwise, and a web project usually has several (`http`,
--- `https`, a Docker one). With more than one that can be started, the choice is
--- asked once per project and remembered (store.lua); `L` asks again. With one
--- or none nothing is asked and nothing changes: that profile is what
--- `dotnet run` would use anyway.
+-- `dotnet run` uses the first `commandName: Project` profile in
+-- `Properties/launchSettings.json` unless told otherwise, and a web project
+-- usually has several (`http`, `https`). With more than one that can be
+-- started, the choice is asked once per project and remembered (store.lua);
+-- `L` asks again. With one or none nothing is asked and nothing changes: that
+-- profile is what `dotnet run` would use anyway.
 local launch_settings = require("dotnet-tree.parser.launch_settings")
 local store = require("dotnet-tree.store")
 
@@ -15,8 +15,18 @@ local function notify(message, level)
   vim.notify("[dotnet-tree] " .. message, level or vim.log.levels.INFO)
 end
 
+-- What was already said this session, so a run does not repeat it every time
+local warned = {}
+local function warn_once(key, message)
+  if not warned[key] then
+    warned[key] = true
+    notify(message, vim.log.levels.WARN)
+  end
+end
+
 ---@param project_path string
----@return string[]
+---@return string[] names
+---@return string|nil err
 local function names(project_path)
   return launch_settings.names(vim.fn.fnamemodify(project_path, ":h"))
 end
@@ -34,7 +44,10 @@ local function ask(project_path, choices, cb)
     end,
   }, function(choice)
     if choice then
-      store.set_profile(project_path, choice)
+      local ok, err = store.set_profile(project_path, choice)
+      if not ok then
+        notify(("could not remember the launch profile, it will be asked again: %s"):format(err), vim.log.levels.WARN)
+      end
       cb(choice)
     end
   end)
@@ -48,12 +61,26 @@ end
 ---@param project_path string
 ---@param cb fun(name: string|nil)
 function M.choose(project_path, cb)
-  local choices = names(project_path)
+  local choices, err = names(project_path)
+  local chosen = store.get_profile(project_path)
+  if err then
+    warn_once("err:" .. project_path, err .. "; launch profiles cannot be chosen, `dotnet` uses its default")
+  end
   if #choices < 2 then
+    -- A choice made before, that the file no longer leaves room for
+    if chosen and not err then
+      warn_once(
+        ("gone:%s:%s"):format(project_path, chosen),
+        ("launch profile %q chosen for %s is not used: %s"):format(
+          chosen,
+          vim.fn.fnamemodify(project_path, ":t:r"),
+          #choices == 1 and ("only %q can be started now"):format(choices[1]) or "none can be started now"
+        )
+      )
+    end
     cb(nil)
     return
   end
-  local chosen = store.get_profile(project_path)
   if chosen and vim.tbl_contains(choices, chosen) then
     cb(chosen)
     return
@@ -64,10 +91,12 @@ end
 --- Ask again which profile to use for `project_path` (`L`).
 ---@param project_path string
 function M.pick(project_path)
-  local choices = names(project_path)
+  local choices, err = names(project_path)
   local project = vim.fn.fnamemodify(project_path, ":t:r")
-  if #choices == 0 then
-    notify(("%s has no launch profile that `r` and `d` can start"):format(project))
+  if err then
+    notify(err, vim.log.levels.WARN)
+  elseif #choices == 0 then
+    notify(("%s has no launch profile that `r`, `d` and `w` can start (commandName Project)"):format(project))
   elseif #choices == 1 then
     notify(("%s has one launch profile, %q: there is nothing to choose"):format(project, choices[1]))
   else

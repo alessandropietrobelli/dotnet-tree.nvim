@@ -511,11 +511,7 @@ function M.debug(state)
     vim.notify("[dotnet-tree] cursor not on a project", vim.log.levels.WARN)
     return
   end
-  local path = node.extra.project.path
-  -- Asked before the build, not after it
-  require("dotnet-tree.launch_profile").choose(path, function(profile)
-    require("dotnet-tree.debug").debug(path, { profile = profile })
-  end)
+  require("dotnet-tree.debug").debug(node.extra.project.path)
 end
 
 function M.choose_launch_profile(state)
@@ -538,9 +534,9 @@ function M.watch(state)
       return
     end
     local path = node.extra.project.path
-    local function start(profile)
+    local function start(extra_args)
       terminal.open(
-        "dotnet watch " .. choice .. " --project " .. vim.fn.shellescape(path) .. profile,
+        "dotnet watch " .. choice .. " --project " .. vim.fn.shellescape(path) .. extra_args,
         "watch " .. choice .. " " .. terminal.project_name(path),
         project_dir(path)
       )
