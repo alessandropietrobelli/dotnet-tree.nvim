@@ -10,6 +10,8 @@
 --          files are lines of its `ProjectSection(SolutionItems)`
 --   .slnx  a folder is `<Folder Name="/parent/name/">`, flat, the hierarchy in
 --          the Name; its files are `<File Path="..." />` inside it
+local bit = require("bit")
+
 local M = {}
 
 local FOLDER_TYPE = "2150E333-8FDC-42A3-9474-1A3956D46DE8"
