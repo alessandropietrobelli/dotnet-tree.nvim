@@ -42,7 +42,9 @@ This source renders that graph.
   through nvim-dap on that project's own assembly — no prompt asking which project, and no
   stale binary, because a failed build stops the launch and shows the compiler errors instead.
   The launch profile in `Properties/launchSettings.json` is read, so a web project is debugged
-  in Development on the port the profile names rather than in Production on port 5000
+  in Development on the port the profile names rather than in Production on port 5000. With
+  several profiles (`http`, `https`, …), `r`, `d` and `w` → run ask which one once per project,
+  and `L` changes it
 - **Build errors in the quickfix list**, deduplicated and jumpable — including the ones no
   language server can see, such as a failed restore, which stops compilation before any
   compiler error is reported. `run`, `test` and `watch` stay in a terminal, where their
@@ -174,6 +176,7 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 | `c` / `C` | clean project / clean solution — to the quickfix list |
 | `r` | run project — in a terminal split |
 | `d` | debug project — builds first, then netcoredbg via nvim-dap |
+| `L` | choose the launch profile `r`, `d` and `w` → run use, when the project has several |
 | `t` | test project — in a terminal split |
 | `w` | watch (run / test / build) — in a terminal split |
 

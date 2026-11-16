@@ -1,4 +1,5 @@
--- `Properties/launchSettings.json`: the profile `dotnet run` would use.
+-- `Properties/launchSettings.json`: the launch profiles `dotnet run` can use,
+-- and what the one in use declares.
 --
 -- This is the file that makes `r` and `d` disagree (#33). `r` runs
 -- `dotnet run`, which reads it; `d` starts the built assembly, which does not.
@@ -7,13 +8,13 @@
 -- `IsDevelopment()` false, no OpenAPI endpoints, `appsettings.Development.json`
 -- never read.
 --
--- What is read is deliberately narrow: one profile, four fields, no MSBuild
--- evaluation and no token expansion. Anything this cannot understand leaves
+-- What is read is deliberately narrow: the names of the `Project` profiles, and
+-- four fields of the one in use; no MSBuild evaluation and no token expansion. Anything this cannot understand leaves
 -- `d` behaving exactly as it did before the file existed -- an unreadable
 -- profile is not a reason to raise, and it is not a licence to guess either.
 --
 -- Two things here are measured rather than assumed, and both would be wrong
--- if written the obvious way. See M.profile and M.read.
+-- if written the obvious way. See M.ordered and M.read.
 
 local M = {}
 
@@ -65,7 +66,9 @@ function M.split_args(text)
   return args
 end
 
---- The profile `dotnet run` would pick, out of a decoded launchSettings table.
+--- Every profile `r`, `d` and `w` → run can start (`commandName: Project`), out
+--- of a decoded launchSettings table, in file order. The first is the one
+--- `dotnet run` picks with no `--launch-profile`.
 ---
 --- "The first profile in the file" is not something a decoded table can
 --- answer: `vim.json.decode` returns a Lua table and `pairs` does not iterate
@@ -86,11 +89,10 @@ end
 --- back to alphabetical order, so the choice is deterministic either way.
 ---@param decoded table the whole decoded launchSettings.json
 ---@param raw string|nil the file's text, for recovering file order
----@return string|nil name
----@return table|nil profile
-function M.profile(decoded, raw)
+---@return {name: string, profile: table}[] profiles every usable one, first in the file first
+function M.ordered(decoded, raw)
   if type(decoded) ~= "table" or type(decoded.profiles) ~= "table" then
-    return nil, nil
+    return {}
   end
 
   local candidates = {}
@@ -100,10 +102,6 @@ function M.profile(decoded, raw)
       table.insert(candidates, { name = name, profile = profile, at = at })
     end
   end
-  if #candidates == 0 then
-    return nil, nil
-  end
-
   table.sort(candidates, function(a, b)
     if a.at and b.at and a.at ~= b.at then
       return a.at < b.at
@@ -113,8 +111,24 @@ function M.profile(decoded, raw)
     end
     return a.name < b.name
   end)
+  return candidates
+end
 
-  return candidates[1].name, candidates[1].profile
+--- The profile `dotnet run` picks without `--launch-profile`, or the one named
+--- `name`; see M.ordered for why the first is found the way it is.
+---@param decoded table the whole decoded launchSettings.json
+---@param raw string|nil the file's text, for recovering file order
+---@param name string|nil the profile to use instead of the first
+---@return string|nil name nil, like the profile, when `name` is not a usable profile: there is no
+---   fallback to the first
+---@return table|nil profile
+function M.profile(decoded, raw, name)
+  for i, candidate in ipairs(M.ordered(decoded, raw)) do
+    if name == nil and i == 1 or candidate.name == name then
+      return candidate.name, candidate.profile
+    end
+  end
+  return nil, nil
 end
 
 --- What the profile declares, in the shape a dap launch configuration wants.
@@ -173,38 +187,106 @@ function M.settings(profile, dir)
   return settings
 end
 
---- Read the launch profile for a project, or nil when there is nothing usable.
----
---- Under `pcall`, and not as caution for its own sake: `vim.json.decode`
---- rejects both comments and a trailing comma, and real launchSettings.json
---- files carry them -- easy-dotnet.nvim maps the filename to `json5`, which is
---- what having met them looks like. A file this cannot read leaves `d` exactly
---- as it was.
+-- One pass over `text` that leaves strings alone, so a `//` inside a URL or a
+-- comma inside a value stays. `comments` drops comments, keeping the line
+-- breaks of a block comment; otherwise trailing commas are dropped.
+local function scan(text, comments)
+  local out, i, n = {}, 1, #text
+  local in_string = false
+  while i <= n do
+    local c = text:sub(i, i)
+    if in_string then
+      table.insert(out, c)
+      if c == "\\" then
+        table.insert(out, text:sub(i + 1, i + 1))
+        i = i + 1
+      elseif c == '"' then
+        in_string = false
+      end
+      i = i + 1
+    elseif c == '"' then
+      in_string = true
+      table.insert(out, c)
+      i = i + 1
+    elseif comments and text:sub(i, i + 1) == "//" then
+      i = text:find("\n", i, true) or (n + 1)
+    elseif comments and text:sub(i, i + 1) == "/*" then
+      local stop = text:find("*/", i + 2, true) or (n - 1)
+      table.insert(out, (text:sub(i, stop + 1):gsub("[^\n]", "")))
+      i = stop + 2
+    elseif not comments and c == "," and text:match("^%s*[}%]]", i + 1) then
+      i = i + 1
+    else
+      table.insert(out, c)
+      i = i + 1
+    end
+  end
+  return table.concat(out)
+end
+
+--- `text` without the comments and trailing commas that `vim.json.decode`
+--- rejects and real launchSettings.json files carry: `dotnet` reads the file
+--- with both allowed, and Visual Studio writes them.
+---@param text string
+---@return string
+function M.strip_jsonc(text)
+  return scan(scan(text, true), false)
+end
+
 ---@param dir string the project directory
----@return table|nil settings { env, args, cwd }
----@return string|nil name the profile the settings came from
-function M.read(dir)
+---@return table|nil decoded
+---@return string|nil raw
+---@return string|nil err why a file that is there cannot be read
+local function load(dir)
   local path = vim.fs.normalize(dir) .. "/Properties/launchSettings.json"
   if vim.fn.filereadable(path) == 0 then
-    return nil, nil
+    return nil, nil, nil
   end
-
-  local raw = table.concat(vim.fn.readfile(path), "\n")
+  local raw = M.strip_jsonc(table.concat(vim.fn.readfile(path), "\n"))
   local ok, decoded = pcall(vim.json.decode, raw)
   if not ok then
-    return nil, nil
+    return nil, nil, ("cannot read %s: %s"):format(vim.fn.fnamemodify(path, ":~:."), tostring(decoded))
+  end
+  return decoded, raw, nil
+end
+
+--- The names of a project's usable profiles (#51), first in the file first:
+--- those `r`, `d` and `w` → run can start, so the ones to choose from.
+---@param dir string the project directory
+---@return string[] names
+---@return string|nil err why there are none when the file is there but cannot be read
+function M.names(dir)
+  local decoded, raw, err = load(dir)
+  if not decoded then
+    return {}, err
+  end
+  return vim.tbl_map(function(candidate)
+    return candidate.name
+  end, M.ordered(decoded, raw))
+end
+
+--- Read the launch profile for a project, or nil when there is nothing usable.
+---
+--- Comments and trailing commas are allowed, as `dotnet` allows them (see
+--- M.strip_jsonc). A file that still cannot be decoded leaves `d` exactly as
+--- it was, and `err` says why, so it is not silently ignored.
+---@param dir string the project directory
+---@param name string|nil the profile chosen (#51); nil for the one `dotnet run` picks by default
+---@return table|nil settings { env, args, cwd }, empty when the profile declares none of them
+---@return string|nil name the profile the settings came from
+---@return string|nil err why there is nothing although the file is there, or the profile asked
+---   for is not in it
+function M.read(dir, name)
+  local decoded, raw, err = load(dir)
+  if not decoded then
+    return nil, nil, err
   end
 
-  local name, profile = M.profile(decoded, raw)
+  local found, profile = M.profile(decoded, raw, name)
   if not profile then
-    return nil, nil
+    return nil, nil, name and ("no launch profile %q that can be started"):format(name) or nil
   end
-
-  local settings = M.settings(profile, dir)
-  if not next(settings) then
-    return nil, nil
-  end
-  return settings, name
+  return M.settings(profile, dir), found, nil
 end
 
 return M

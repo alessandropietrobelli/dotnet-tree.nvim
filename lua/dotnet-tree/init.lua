@@ -33,6 +33,7 @@ M.default_config = {
       ["C"] = { "clean_solution", desc = "[.NET] clean solution" },
       ["r"] = { "run_project", desc = "[.NET] run project" },
       ["d"] = { "debug", desc = "[.NET] debug project" },
+      ["L"] = { "choose_launch_profile", desc = "[.NET] choose launch profile" },
       ["t"] = { "test", desc = "[.NET] test project" },
       ["w"] = { "watch", desc = "[.NET] watch run/test/build" },
     },

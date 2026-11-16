@@ -9,6 +9,22 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+### Added
+
+- A project with several launch profiles (`commandName: Project`) asks which
+  one `r`, `d` and `w` → run use, the first time, and remembers the answer per
+  project; `r` and `w` → run pass it as `--launch-profile`. `L` on a project
+  asks again. A project with one such profile or none starts as before,
+  without a question
+  ([#51](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/51)).
+
+### Changed
+
+- A `launchSettings.json` with comments or trailing commas, which `dotnet`
+  reads and Visual Studio writes, is read too: `d` used to ignore it and start
+  without its environment. A file that cannot be read at all is reported
+  instead of skipped in silence.
+
 ### Fixed
 
 - `d` debugs a project whose `AssemblyName` is written as a property, such as

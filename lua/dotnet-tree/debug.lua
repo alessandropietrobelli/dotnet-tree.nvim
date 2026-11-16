@@ -411,12 +411,16 @@ local function launch(dap, target, program, opts)
     )
   end
 
-  -- What `dotnet run` would have used, so that `r` and `d` start the same
-  -- project the same way. A project with no launchSettings.json, or one this
-  -- cannot read, gets `nil` and the configuration below is what it always was.
-  local profile, profile_name = launch_settings.read(target.dir)
+  -- What `dotnet run` would have used -- with `--launch-profile` when one was
+  -- chosen (#51) -- so that `r` and `d` start the same project the same way. A
+  -- project with no launchSettings.json gets `nil` and the configuration below
+  -- is what it always was; one whose file cannot be read, or that no longer has
+  -- the profile chosen, says so rather than launching as if nothing was wrong.
+  local profile, profile_name, profile_err = launch_settings.read(target.dir, opts.profile)
   if profile_name then
     notify(("launch profile %q"):format(profile_name), vim.log.levels.INFO)
+  elseif profile_err then
+    notify(profile_err .. "; launching without a launch profile")
   end
 
   ensure_adapter(dap, opts.debugger)
@@ -459,6 +463,8 @@ end
 ---@param project_path string
 ---@param opts table|nil
 ---   build      boolean, default true: build before launching
+---   profile    string|nil, the launch profile to use (#51); asked for, when the project has
+---              several, if not given
 ---   on_launch  fun(program) called with the dll actually launched
 function M.debug(project_path, opts)
   opts = opts or {}
@@ -609,12 +615,26 @@ function M.debug(project_path, opts)
 
   -- A project that has never been built and declares nothing gets `nil` here:
   -- build first, then ask bin/ what came out.
-  local declared = M.frameworks(target)
-  if #declared == 0 then
-    proceed(nil)
-  else
-    choose(declared, proceed)
+  local function start()
+    local declared = M.frameworks(target)
+    if #declared == 0 then
+      proceed(nil)
+    else
+      choose(declared, proceed)
+    end
   end
+
+  -- The launch profile is asked here: after a project that cannot be launched
+  -- has been refused, so nobody answers a question for nothing, and before the
+  -- build, so the question does not wait for it.
+  if opts.profile ~= nil then
+    start()
+    return
+  end
+  require("dotnet-tree.launch_profile").choose(target.path, function(name)
+    opts.profile = name
+    start()
+  end)
 end
 
 return M
