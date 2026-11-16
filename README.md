@@ -27,7 +27,11 @@ This source renders that graph.
 ## Features
 
 - **Both solution formats** — legacy `.sln` and the newer XML `.slnx`
-- **Solution folders** rendered as real nodes, nested as declared
+- **Solution folders** rendered as real nodes, nested as declared — and edited from the tree:
+  `n` on the solution creates one, `n` on a solution folder creates a file in its directory on
+  disk and lists it there, or a subfolder, and `a` adds a file that already exists; on a file a
+  folder lists, both act on that folder. The `.sln` or `.slnx` is edited as text, keeping its line
+  endings and BOM
 - **Projects** with their `.csproj` pinned on top, package references and project references
 - **Central Package Management** — resolves versions from the `Directory.Packages.props`
   nearest to each project, following the import that chains a nested one to the root one;
@@ -170,8 +174,8 @@ Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim.
 | `?` | show help |
 | `s` | select solution (when the repo has more than one) |
 | `e` | edit the project's `.csproj` |
-| `a` | add package or project reference — with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim) installed, packages open its window |
-| `n` | new file from template |
+| `a` | add package or project reference — with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim) installed, packages open its window. On a solution folder: add an existing file to it |
+| `n` | new file from template. On the solution: new solution folder; on a solution folder: new file in it, or a subfolder |
 | `b` / `B` | build project / build solution — to the quickfix list |
 | `c` / `C` | clean project / clean solution — to the quickfix list |
 | `r` | run project — in a terminal split |
