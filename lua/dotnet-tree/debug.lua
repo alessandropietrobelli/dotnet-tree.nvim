@@ -128,7 +128,8 @@ end
 ---@param name string the MSBuild property to evaluate
 ---@param tfm string|nil pass it for a multi-targeted project: the outer build
 ---   has no single TargetPath
----@param cb fun(value: string|nil)
+---@param cb fun(value: string|nil, failure: string|nil) `failure` says why there is no value
+---   when MSBuild failed (see M.property_failure); nil with no value means the property is empty
 function M.get_property(project_path, name, tfm, cb)
   local cmd = {
     "dotnet",
@@ -146,8 +147,43 @@ function M.get_property(project_path, name, tfm, cb)
   -- the query at the project directory instead would let it answer for one SDK
   -- while the build used another.
   M.query(cmd, function(code, lines)
-    cb(M.parse_property(code, lines))
+    local value = M.parse_property(code, lines)
+    if value then
+      cb(value)
+    else
+      cb(nil, M.property_failure(code, lines))
+    end
   end)
+end
+
+--- Why `-getProperty` gave no value, in words for the user, or nil when it just
+--- answered that the property is empty. An SDK older than 8 is only one of the
+--- reasons: a project that fails to evaluate, extra output next to the value,
+--- or `dotnet` not starting at all look the same to M.parse_property.
+---@param code integer
+---@param lines string[]
+---@return string|nil
+function M.property_failure(code, lines)
+  local first
+  for _, line in ipairs(lines) do
+    if line:find("MSB1001", 1, true) then
+      return "asking it needs SDK 8 or later"
+    end
+    local trimmed = vim.trim(line)
+    if trimmed ~= "" then
+      -- An error line says more than whatever came before it
+      if not first or (trimmed:find("error", 1, true) and not first:find("error", 1, true)) then
+        first = trimmed
+      end
+    end
+  end
+  if code == -1 then
+    return "dotnet could not be started"
+  elseif code ~= 0 then
+    return first and ("MSBuild failed (exit %d): %s"):format(code, first) or ("MSBuild failed (exit %d)"):format(code)
+  elseif first then
+    return "MSBuild printed more than the value: " .. first
+  end
 end
 
 --- Path to the netcoredbg executable, or nil.
@@ -206,8 +242,9 @@ end
 ---
 ---@param project_path string path to a .csproj/.fsproj/.vbproj
 ---@return table|nil target { path, dir, assembly_name, unresolved_name, is_test_project, frameworks,
----   dll_for }: `assembly_name` is nil, and `dll_for` returns nil, when the project writes it as a
----   property (`unresolved_name`), which only MSBuild can expand
+---   dll_for }: when the project writes AssemblyName as a property, which only MSBuild can expand,
+---   `assembly_name` is nil, `dll_for` returns nil and `unresolved_name` holds it verbatim
+---   (e.g. `$(ToolName)`)
 ---@return string|nil reason why the project cannot be launched
 function M.resolve(project_path)
   local project = csproj.parse(project_path)
@@ -298,7 +335,9 @@ end
 --- (#30), so those 15 arrive here with a framework; what is left is what
 --- MSBuild alone can resolve, such as `$(DefaultTfm)`. Rather than
 --- refuse, fall back to what is actually on disk under bin/<configuration>/ --
---- after a build that directory is the truth anyway.
+--- after a build that directory is the truth anyway. Without a known assembly
+--- name (one written as a property) there is no file to look for there, and
+--- nothing is returned.
 ---@param target table from M.resolve
 ---@return string[] frameworks
 function M.frameworks(target)
@@ -306,7 +345,7 @@ function M.frameworks(target)
     return target.frameworks
   end
 
-  -- Reading bin/ means knowing the file name to look for
+  -- Reading bin/ means knowing the file name to look for.
   local found = {}
   if not target.assembly_name then
     return found
@@ -457,14 +496,15 @@ function M.debug(project_path, opts)
     end)
   end
 
-  -- MSBuild had no answer, and the project's AssemblyName is a property only
-  -- MSBuild can expand: nothing names the assembly. That happens on an SDK
-  -- older than 8, which does not know `-getProperty`.
-  local function unnamed()
+  -- MSBuild did not name the output, and the project's AssemblyName is a
+  -- property only MSBuild can expand: nothing names the assembly. `failure` is
+  -- what MSBuild said, when it failed rather than answering with nothing.
+  local function unnamed(failure)
     notify(
-      ("%s declares AssemblyName as %s, and MSBuild did not name the output: that needs SDK 8 or later"):format(
+      ("%s declares AssemblyName as %s, and MSBuild did not name the output: %s"):format(
         vim.fn.fnamemodify(target.path, ":t"),
-        target.unresolved_name
+        tostring(target.unresolved_name),
+        failure or "its answer was empty"
       ),
       vim.log.levels.ERROR
     )
@@ -475,14 +515,15 @@ function M.debug(project_path, opts)
   -- `-getProperty`. The composed path is a guess about the layout; the answer
   -- is not, so the answer is preferred whenever there is one and it is on disk.
   local function launch_tfm(tfm)
-    M.get_property(target.path, "TargetPath", tfm, function(from_msbuild)
+    M.get_property(target.path, "TargetPath", tfm, function(from_msbuild, failure)
       -- MSBuild's answer is preferred even when the file is not there: it is
       -- the path the build was configured to produce, so it is also the right
       -- path to name in the message if it is missing. The composed one is only
-      -- for an SDK that cannot answer.
+      -- for an SDK that cannot answer, and when AssemblyName is a property
+      -- there is none: then `unnamed` says why.
       local program = from_msbuild or target.dll_for(tfm)
       if not program then
-        unnamed()
+        unnamed(failure)
         return
       end
       launch(dap, target, program, opts)
@@ -500,12 +541,12 @@ function M.debug(project_path, opts)
     -- `$(DefaultTfm)`, which the parser cannot expand -- and comes back empty
     -- for the outer build of a multi-targeted one, which is the case that
     -- needs a choice.
-    M.get_property(target.path, "TargetPath", nil, function(from_msbuild)
+    M.get_property(target.path, "TargetPath", nil, function(from_msbuild, path_failure)
       if from_msbuild then
         launch(dap, target, from_msbuild, opts)
         return
       end
-      M.get_property(target.path, "TargetFrameworks", nil, function(declared)
+      M.get_property(target.path, "TargetFrameworks", nil, function(declared, frameworks_failure)
         local built = {}
         if declared then
           for tf in declared:gmatch("[^;%s]+") do
@@ -518,7 +559,7 @@ function M.debug(project_path, opts)
           built = M.frameworks(target)
         end
         if #built == 0 and target.unresolved_name then
-          unnamed()
+          unnamed(frameworks_failure or path_failure)
           return
         end
         if #built == 0 then

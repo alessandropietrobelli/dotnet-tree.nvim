@@ -198,8 +198,9 @@ leaves no `bin/` at all, and `<OutputPath>`, `<BaseOutputPath>` and
 `<AppendTargetFrameworkToOutputPath>` each move it somewhere else again. MSBuild is the only
 thing that knows, also when `<AssemblyName>` is written as a property such as `$(ToolName)`.
 `-getProperty` needs the .NET 8 SDK or newer; on an older one the default layout is composed as
-before, which an `AssemblyName` written as a property makes impossible, and `d` says so. A library is refused with the reason rather than launched;
-a multi-targeted project asks which framework; a failed build leaves the quickfix list on
+before, which an `AssemblyName` written as a property makes impossible: `d` then stops after the
+build and says why, and when MSBuild fails on a newer SDK the message quotes its error. A library
+is refused with the reason rather than launched; a multi-targeted project asks which framework; a failed build leaves the quickfix list on
 screen and never starts the debugger. A Blazor WebAssembly app is refused too: MSBuild calls
 it an `Exe`, but it runs in the browser and netcoredbg cannot start it. A project that declares
 no `TargetFramework` of its own inherits it from the nearest `Directory.Build.props`, the way
