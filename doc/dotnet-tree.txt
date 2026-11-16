@@ -362,7 +362,7 @@ refused.
 On a file listed in a solution folder, `n` and `a` act on that folder. A
 solution file with unsaved changes in a buffer is not written over: save or
 discard them first. Removing items and renaming or deleting folders are not
-done from the tree yet (#50).
+done from the tree yet.
 
 ==============================================================================
 5. MAPPINGS                                         *dotnet-tree-mappings*
