@@ -62,6 +62,10 @@ mappings may land in a minor release; they will always be listed here.
 
 ### Fixed
 
+- `,d` on an Azure Functions app says debugging one is not supported yet and
+  points to `,r`, instead of building it and launching its assembly on its
+  own, where no function runs. An in-process app was refused as a library
+  ([#65](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/65)).
 - `n` uses the project's `<RootNamespace>`, from the project or the
   `Directory.Build.props` above it, with `$(MSBuildProjectName)` and
   `$(AssemblyName)` expanded, instead of always the project's name; without one

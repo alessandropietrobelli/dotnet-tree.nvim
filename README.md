@@ -63,7 +63,8 @@ This source renders that graph.
   terminal in the editor window
 - **Azure Functions apps** run with `,r` like any other project: `dotnet run` on the isolated
   worker SDK 2.x, `func start` on an in-process app or worker SDK 1.x, with a warning when the
-  app uses `UseDevelopmentStorage=true` and Azurite is not running
+  app uses `UseDevelopmentStorage=true` and Azurite is not running. `,d` does not debug one yet,
+  and says so
 - **Multiple solutions** — pick one with `,s`; the choice is remembered per working directory
   in `stdpath("state")/dotnet-tree/solutions.json`
 - **Follow the current file** — `:Neotree dotnet-tree reveal` puts the cursor on the file you
@@ -244,7 +245,8 @@ build and says why, and when MSBuild fails on a newer SDK the message quotes its
 is refused with the reason rather than launched; a multi-targeted project asks which framework;
 a failed build leaves the quickfix list on screen and never starts the debugger. A Blazor
 WebAssembly app is refused too: MSBuild calls it an `Exe`, but it runs in the browser and
-netcoredbg cannot start it. A project that declares
+netcoredbg cannot start it. So is an Azure Functions app, for now: it runs under the Functions
+host, which `,d` does not attach to yet; `,r` runs it. A project that declares
 no `TargetFramework` of its own inherits it from the nearest `Directory.Build.props`, the way
 MSBuild does — and when that file only chains to the one above it with
 `$([MSBuild]::GetPathOfFileAbove(...))`, as a `src/Directory.Build.props` usually does, that

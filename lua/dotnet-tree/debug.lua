@@ -253,6 +253,16 @@ function M.resolve(project_path)
   end
 
   local name = vim.fn.fnamemodify(project_path, ":t")
+  -- A function app runs under the Functions host: launched on its own, the
+  -- assembly starts no host and serves no function, so a debugger on it stops
+  -- at nothing. Debugging one means attaching to what `func start` started,
+  -- which is not done yet; until then, say so rather than launch something
+  -- that cannot work. It comes first: an in-process app is a Library, and
+  -- "this is a library" would send the reader the wrong way.
+  if require("dotnet-tree.functions").detect(project_path) then
+    return nil, ("%s is an Azure Functions app: debugging one is not supported yet, `,r` runs it"):format(name)
+  end
+
   local output_type = project.output_type
 
   if is_unevaluated(output_type) then
