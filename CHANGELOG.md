@@ -36,8 +36,9 @@ mappings may land in a minor release; they will always be listed here.
   without its environment. A file that cannot be read at all is reported
   instead of skipped in silence.
 
-- Run, test and watch terminals open side by side along the bottom, sharing
-  its width, instead of stacking up until each one is a couple of lines tall.
+- Run, test and watch terminals open side by side in one strip along the
+  bottom, sharing its width evenly, instead of stacking up until each one is a
+  couple of lines tall.
 
 ### Added
 
