@@ -35,7 +35,10 @@ M.default_config = {
       ["x"] = { "cut_to_clipboard", desc = "[file] cut to clipboard" },
       ["p"] = { "paste_from_clipboard", desc = "[file] paste from clipboard" },
       ["n"] = { "new_file", desc = "[file] new .cs file from template, or in a solution folder" },
-      -- .NET actions, under a prefix neo-tree does not use
+      -- .NET actions, under a prefix neo-tree does not use. `,` itself waits
+      -- for the next key and shows them (see commands.dotnet_actions); the `,`
+      -- mappings below say which command each key runs.
+      [","] = { "dotnet_actions", desc = "[.NET] .NET actions: shows them, then waits for the key" },
       [",s"] = { "select_solution", desc = "[.NET] select solution" },
       [",e"] = { "edit_project_file", desc = "[.NET] edit .csproj" },
       [",a"] = { "add_package_or_reference", desc = "[.NET] add package/reference" },

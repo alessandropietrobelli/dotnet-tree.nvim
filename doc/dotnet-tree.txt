@@ -294,7 +294,9 @@ configured one yourself: an adapter you set up wins.
 
 RUN, TEST AND WATCH                                     *dotnet-tree-run*
 
-`,r`, `,t` and `,w` open a terminal split that starts in the project's folder,
+`,r`, `,t` and `,w` open a terminal along the bottom of the screen; the next
+ones open beside it and share its width, so several running apps each keep
+the full height for their logs. The terminal starts in the project's folder,
 not in Neovim's working directory: the default ASP.NET Core host reads
 appsettings.json from the directory it starts in. Neovim's own working
 directory does not change.
@@ -422,7 +424,11 @@ nvim-lsp-file-operations loaded, that plugin does this instead.
 
 Defaults inside the dotnet-tree window. Press `?` for this list in Neovim.
 Files and folders use neo-tree's own keys, as in its filesystem source; the
-.NET actions are under `,`, which neo-tree does not use. neo-tree's other
+.NET actions are under `,`, which neo-tree does not use. Press `,` and a
+window lists them and waits, for as long as it takes, for the key of the one
+to run: a pause after `,` never turns `,r` into `r` (rename) or `,d` into `d`
+(delete), whatever 'timeoutlen' is. The list comes from the `,` mappings, so
+remapped or added ones show up and work. neo-tree's other
 defaults (s, S and t to open in a split or a tab, P preview, q close...) work
 as in its other sources.
 

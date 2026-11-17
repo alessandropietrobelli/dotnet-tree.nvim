@@ -172,7 +172,8 @@ directory contains a solution, and a winbar lets you flip back to files:
 
 Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim. Files and folders use
 neo-tree's own keys, the same as in its filesystem source; the .NET actions are under `,`, which
-neo-tree does not use. neo-tree's other defaults (`s` / `S` / `t` to open in a split or a tab,
+neo-tree does not use. Press `,` and a window lists them and waits, for as long as you need, for the
+key of the one to run — a pause after `,` never turns `,r` into `r`. neo-tree's other defaults (`s` / `S` / `t` to open in a split or a tab,
 `P` preview, `q` close…) work as everywhere else.
 
 | Key | Action |
@@ -219,7 +220,9 @@ To keep the keys of 0.3 and earlier, map them back in your `opts`:
 },
 ```
 
-`,r`, `,t` and `,w` start in the project's folder, not in Neovim's working directory, so an
+Each of them opens a terminal along the bottom; the next ones open beside it, sharing its width, so
+several running apps stay readable. `,r`, `,t` and `,w` start in the project's folder, not in
+Neovim's working directory, so an
 ASP.NET Core app finds its `appsettings.json` wherever Neovim was opened. An Azure Functions
 app (its `.csproj` sets `<AzureFunctionsVersion>`, references `Microsoft.NET.Sdk.Functions` or
 `Microsoft.Azure.Functions.Worker.Sdk`, or its folder has a `host.json`) needs

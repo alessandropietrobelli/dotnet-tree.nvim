@@ -430,6 +430,7 @@ describe("file operations from the tree", function()
       { "did", dir .. "/src/Api/Foo.cs", dir .. "/src/Api/Bar.cs" },
     }, lsp_calls)
     assert.is_true(said("2 files edited by roslyn, not saved yet: :wa"))
+    assert.is_true(said("renamed Foo.cs to Bar.cs ("), "names only, within one folder")
   end)
 
   it("refuses a rename over another file, or to a path", function()
@@ -822,6 +823,95 @@ describe("default mappings", function()
     assert.are.same({ "toggle", "vsplit" }, opened)
     package.loaded["neo-tree.sources.common.commands"] = nil
     package.loaded["dotnet-tree.commands"] = nil
+  end)
+
+  -- `,` then a pause then `r`: the pause must not turn it into `r`, rename
+  describe(", and the key after it", function()
+    local commands, ran, keys, messages, real_getcharstr, real_notify
+
+    before_each(function()
+      ran, messages = {}, {}
+      package.loaded["neo-tree.sources.common.commands"] = {}
+      package.loaded["dotnet-tree.commands"] = nil
+      commands = require("dotnet-tree.commands")
+      real_getcharstr, real_notify = vim.fn.getcharstr, vim.notify
+      vim.fn.getcharstr = function()
+        return table.remove(keys, 1)
+      end
+      vim.notify = function(msg)
+        table.insert(messages, msg)
+      end
+    end)
+
+    after_each(function()
+      vim.fn.getcharstr, vim.notify = real_getcharstr, real_notify
+      package.loaded["neo-tree.sources.common.commands"] = nil
+      package.loaded["dotnet-tree.commands"] = nil
+    end)
+
+    local function state(extra)
+      local all = vim.tbl_extend("force", mappings, extra or {})
+      return {
+        winid = vim.api.nvim_get_current_win(),
+        window = { mappings = all },
+        commands = setmetatable({
+          run_project = function()
+            table.insert(ran, "run")
+          end,
+          debug = function()
+            table.insert(ran, "debug")
+          end,
+          rename = function()
+            table.insert(ran, "rename")
+          end,
+        }, { __index = commands }),
+      }
+    end
+
+    it("runs the action of the key that follows, however long it takes", function()
+      local floats, lines
+      keys = { "r" }
+      local getcharstr = vim.fn.getcharstr
+      vim.fn.getcharstr = function()
+        floats = vim.tbl_filter(function(win)
+          return vim.api.nvim_win_get_config(win).relative ~= ""
+        end, vim.api.nvim_list_wins())
+        lines = floats[1] and vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(floats[1]), 0, -1, false)
+        return getcharstr()
+      end
+      commands.dotnet_actions(state())
+      keys = { "d" }
+      vim.fn.getcharstr = getcharstr
+      commands.dotnet_actions(state())
+      assert.are.same({ "run", "debug" }, ran)
+      assert.are.equal(1, #floats, "a float shows the actions while it waits")
+      assert.truthy(vim.tbl_contains(lines, " r  run project"), vim.inspect(lines))
+      assert.are.same(
+        {},
+        vim.tbl_filter(function(win)
+          return vim.api.nvim_win_get_config(win).relative ~= ""
+        end, vim.api.nvim_list_wins()),
+        "and closes after"
+      )
+    end)
+
+    it("does nothing on <esc>, and says when a key has no action", function()
+      keys = { "\27" }
+      commands.dotnet_actions(state())
+      keys = { "q" }
+      commands.dotnet_actions(state())
+      assert.are.same({}, ran)
+      assert.matches("no .NET action on `,q`", messages[1], 1, true)
+    end)
+
+    it("follows the , mappings of the configuration", function()
+      keys = { "x" }
+      commands.dotnet_actions(state({ [",x"] = { "rename", desc = "[.NET] my own" }, [",r"] = "none" }))
+      keys = { "r" }
+      commands.dotnet_actions(state({ [",x"] = { "rename", desc = "[.NET] my own" }, [",r"] = "none" }))
+      assert.are.same({ "rename" }, ran)
+      assert.matches("no .NET action on `,r`", messages[1], 1, true)
+    end)
   end)
 
   it("map only commands the source has", function()

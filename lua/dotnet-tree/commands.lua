@@ -804,6 +804,114 @@ function M.watch(state)
   end)
 end
 
+-- ─── the .NET actions, behind `,` ──────────────────────────────────────────
+--
+-- The .NET actions are mapped as `,b`, `,r`, `,d`... A mapping of two keys
+-- only waits 'timeoutlen' for the second: with a short one, as many
+-- configurations set, a pause after `,` dropped it, and `r` or `d` alone ran
+-- their file operation -- rename, delete -- instead of run or debug. So `,`
+-- is a key of its own: it shows what can follow, waits for that key for as
+-- long as it takes, and runs the action the `,` mapping for it names. Remapped
+-- or added `,` mappings are read from the configuration, so they work and show
+-- up too.
+
+-- The `,` + key mappings of the source: key -> { command, desc }
+local function prefixed_actions(state)
+  local actions = {}
+  for lhs, value in pairs(state.window and state.window.mappings or {}) do
+    local key = type(lhs) == "string" and lhs:match("^,(.)$")
+    if key then
+      local command, desc = value, nil
+      if type(value) == "table" then
+        command, desc = value[1] or value.command, value.desc
+      end
+      if command and command ~= "none" and command ~= "noop" then
+        desc = desc or (type(command) == "string" and command or "")
+        table.insert(actions, { key = key, command = command, desc = desc:gsub("^%[%.NET%]%s*", "") })
+      end
+    end
+  end
+  -- Each lower-case key before its upper-case one, the rest alphabetically
+  table.sort(actions, function(a, b)
+    if a.key:lower() ~= b.key:lower() then
+      return a.key:lower() < b.key:lower()
+    end
+    return a.key > b.key
+  end)
+  return actions
+end
+
+-- A float at the bottom of the tree window saying the next key is a .NET
+-- action, and which ones there are
+local function show_actions(state, actions)
+  local lines = {}
+  for _, action in ipairs(actions) do
+    table.insert(lines, (" %s  %s"):format(action.key, action.desc))
+  end
+  local width = 0
+  for _, line in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(line) + 1)
+  end
+  local parent = state.winid and vim.api.nvim_win_is_valid(state.winid) and state.winid
+    or vim.api.nvim_get_current_win()
+  width = math.min(width, math.max(vim.api.nvim_win_get_width(parent) - 2, 10))
+  local height = math.min(#lines, math.max(vim.api.nvim_win_get_height(parent) - 2, 1))
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  for i, action in ipairs(actions) do
+    vim.api.nvim_buf_add_highlight(buf, -1, "Special", i - 1, 1, 1 + #action.key)
+  end
+  vim.bo[buf].bufhidden = "wipe"
+  local ok, win = pcall(vim.api.nvim_open_win, buf, false, {
+    relative = "win",
+    win = parent,
+    anchor = "SW",
+    row = vim.api.nvim_win_get_height(parent),
+    col = 0,
+    width = width,
+    height = height,
+    style = "minimal",
+    border = "rounded",
+    title = " dotnet-tree ",
+    title_pos = "left",
+    footer = " <esc> cancel ",
+    footer_pos = "right",
+    focusable = false,
+    zindex = 250,
+  })
+  return ok and win or nil
+end
+
+--- `,`: wait for the key of a .NET action, showing them, then run it.
+function M.dotnet_actions(state)
+  local actions = prefixed_actions(state)
+  if #actions == 0 then
+    warn("no .NET actions are mapped under `,`")
+    return
+  end
+  local win = show_actions(state, actions)
+  vim.cmd("redraw")
+  local ok, key = pcall(vim.fn.getcharstr)
+  if win and vim.api.nvim_win_is_valid(win) then
+    vim.api.nvim_win_close(win, true)
+  end
+  if not ok or key == "\27" or key == "" then
+    return
+  end
+  for _, action in ipairs(actions) do
+    if action.key == key then
+      local command = action.command
+      local fn = type(command) == "function" and command or (state.commands and state.commands[command]) or M[command]
+      if not fn then
+        warn(("`,%s` is mapped to %s, which the .NET tree does not have"):format(key, tostring(command)))
+        return
+      end
+      return fn(state)
+    end
+  end
+  warn(("no .NET action on `,%s`; `,` shows them"):format(vim.fn.keytrans(key)))
+end
+
 -- ─── file operations (#50) ─────────────────────────────────────────────────
 --
 -- Adding, renaming, moving, copying and deleting go through neo-tree's own
@@ -1069,7 +1177,11 @@ local function relocate(state, target, dest, verb, on_done)
         table.concat(edits.servers, ", ")
       )
     end
-    info(("%s %s to %s%s"):format(verb, display(target.path), display(final), by))
+    -- Within one folder the names say it, and a short line needs no Enter
+    local same_dir = vim.fn.fnamemodify(target.path, ":h") == vim.fn.fnamemodify(final, ":h")
+    local from = same_dir and vim.fn.fnamemodify(target.path, ":t") or display(target.path)
+    local to = same_dir and vim.fn.fnamemodify(final, ":t") or display(final)
+    info(("%s %s to %s%s"):format(verb, from, to, by))
     reveal_after(state, final)
     if on_done then
       on_done()

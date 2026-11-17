@@ -1,4 +1,4 @@
--- The terminal split `,r`, `,t`, `,w` and `,a` run in, and the `dotnet remove`
+-- The terminals `,r`, `,t`, `,w` and `,a` run in, and the `dotnet remove`
 -- that `d` runs on a package, a reference or a project.
 --
 -- A `:terminal` buffer is named after its command line: `term://…//1234:dotnet
@@ -45,7 +45,53 @@ function M.winbar(label)
   return " " .. label:gsub("%%", "%%%%")
 end
 
---- Opens a bottom split running `cmd` in a terminal, named after `label`.
+--- The windows of this tab showing one of these terminals, left to right.
+---@return integer[]
+function M.windows()
+  local found = {}
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
+    if name:sub(1, #M.prefix) == M.prefix and vim.api.nvim_win_get_config(win).relative == "" then
+      table.insert(found, win)
+    end
+  end
+  table.sort(found, function(a, b)
+    return vim.api.nvim_win_get_position(a)[2] < vim.api.nvim_win_get_position(b)[2]
+  end)
+  return found
+end
+
+-- Where a new terminal goes. The first opens a split along the bottom; the
+-- next ones open beside the last, in the same strip, and the strip's width is
+-- shared out evenly: stacked one above the other, a few runs left each a
+-- couple of lines, too few to read a log in.
+local function open_window()
+  local others = M.windows()
+  if #others == 0 then
+    vim.cmd("botright 15split")
+    return vim.api.nvim_get_current_win()
+  end
+  vim.api.nvim_set_current_win(others[#others])
+  vim.cmd("rightbelow vsplit")
+  local win = vim.api.nvim_get_current_win()
+  -- The new window shows the terminal it was split from until it gets its own
+  local all = M.windows()
+  if not vim.tbl_contains(all, win) then
+    table.insert(all, win)
+  end
+  local total = 0
+  for _, w in ipairs(all) do
+    total = total + vim.api.nvim_win_get_width(w)
+  end
+  local each = math.floor(total / #all)
+  for _, w in ipairs(all) do
+    pcall(vim.api.nvim_win_set_width, w, each)
+  end
+  return win
+end
+
+--- Opens a terminal running `cmd`, named after `label`: along the bottom, or
+--- beside the terminals already open there.
 ---
 --- The buffer is unlisted: a listed terminal shows up in a bufferline next to
 --- the files, and clicking it there opens the terminal in the editor window
@@ -68,8 +114,7 @@ function M.open(cmd, label, cwd)
     )
     return nil
   end
-  vim.cmd("botright 15split")
-  local win = vim.api.nvim_get_current_win()
+  local win = open_window()
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_win_set_buf(win, buf)
   local ok, job = pcall(function()
