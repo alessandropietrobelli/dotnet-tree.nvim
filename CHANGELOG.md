@@ -9,6 +9,8 @@ mappings may land in a minor release; they will always be listed here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-17
+
 ### Changed
 
 - **The keys follow neo-tree's.** Files and folders use the keys neo-tree's
@@ -35,7 +37,6 @@ mappings may land in a minor release; they will always be listed here.
   reads and Visual Studio writes, is read too: `,d` used to ignore it and start
   without its environment. A file that cannot be read at all is reported
   instead of skipped in silence.
-
 - Run, test and watch terminals open side by side in one strip along the
   bottom, sharing its width evenly, instead of stacking up until each one is a
   couple of lines tall.
@@ -461,7 +462,8 @@ projects.
   [#10](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/10),
   and fixed after `0.1.2` — see Unreleased.
 
-[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/alessandropietrobelli/dotnet-tree.nvim/compare/v0.2.0...v0.3.0
