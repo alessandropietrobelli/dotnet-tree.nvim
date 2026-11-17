@@ -1,4 +1,4 @@
--- The terminal split `,r`, `,t`, `,w` and `,a` run in, and the `dotnet remove`
+-- The terminals `,r`, `,t`, `,w` and `,a` run in, and the `dotnet remove`
 -- that `d` runs on a package, a reference or a project.
 --
 -- A `:terminal` buffer is named after its command line: `term://…//1234:dotnet
@@ -45,7 +45,78 @@ function M.winbar(label)
   return " " .. label:gsub("%%", "%%%%")
 end
 
---- Opens a bottom split running `cmd` in a terminal, named after `label`.
+--- The strip of terminals along the bottom of this tab, left to right: the
+--- non-floating windows showing one of these terminals on the lowest row any
+--- of them is on. One shown somewhere else -- in the editor area, through
+--- `:ls!` -- is not part of it.
+---@return integer[]
+function M.windows()
+  local found, lowest = {}, -1
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
+    if name:sub(1, #M.prefix) == M.prefix and vim.api.nvim_win_get_config(win).relative == "" then
+      local row = vim.api.nvim_win_get_position(win)[1]
+      table.insert(found, { win = win, row = row, col = vim.api.nvim_win_get_position(win)[2] })
+      lowest = math.max(lowest, row)
+    end
+  end
+  local strip = vim.tbl_filter(function(entry)
+    return entry.row == lowest
+  end, found)
+  table.sort(strip, function(a, b)
+    return a.col < b.col
+  end)
+  return vim.tbl_map(function(entry)
+    return entry.win
+  end, strip)
+end
+
+-- Give the terminals of the strip an even share of its width
+local function even_out(wins)
+  local total = 0
+  for _, w in ipairs(wins) do
+    total = total + vim.api.nvim_win_get_width(w)
+  end
+  local each = math.floor(total / #wins)
+  for _, w in ipairs(wins) do
+    vim.api.nvim_win_set_width(w, each)
+  end
+end
+
+-- Where a new terminal goes. The first opens a split along the bottom; the
+-- next ones open to the right of the strip's last, and the terminals share
+-- the strip's width: stacked one above the other, a few runs left each a
+-- couple of lines, too few to read a log in. Returns nil, and says so, when
+-- there is no room left beside them.
+local function open_window()
+  local others = M.windows()
+  if #others == 0 then
+    vim.cmd("botright 15split")
+    return vim.api.nvim_get_current_win()
+  end
+  local from = vim.api.nvim_get_current_win()
+  vim.api.nvim_set_current_win(others[#others])
+  local ok, err = pcall(vim.cmd, "rightbelow vsplit")
+  if not ok then
+    vim.api.nvim_set_current_win(from)
+    vim.notify(
+      ("[dotnet-tree] no room for another terminal beside the open ones, close one: %s"):format(err),
+      vim.log.levels.ERROR
+    )
+    return nil
+  end
+  local win = vim.api.nvim_get_current_win()
+  -- The new window shows the terminal it was split from until it gets its own
+  local all = M.windows()
+  if not vim.tbl_contains(all, win) then
+    table.insert(all, win)
+  end
+  even_out(all)
+  return win
+end
+
+--- Opens a terminal running `cmd`, named after `label`: along the bottom, or
+--- beside the terminals already open there.
 ---
 --- The buffer is unlisted: a listed terminal shows up in a bufferline next to
 --- the files, and clicking it there opens the terminal in the editor window
@@ -68,8 +139,11 @@ function M.open(cmd, label, cwd)
     )
     return nil
   end
-  vim.cmd("botright 15split")
-  local win = vim.api.nvim_get_current_win()
+  local from = vim.api.nvim_get_current_win()
+  local win = open_window()
+  if not win then
+    return nil
+  end
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_win_set_buf(win, buf)
   local ok, job = pcall(function()
@@ -81,6 +155,14 @@ function M.open(cmd, label, cwd)
   if not ok or job <= 0 then
     pcall(vim.api.nvim_win_close, win, true)
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
+    -- As it was before: the remaining terminals share the strip, and the
+    -- cursor is back where `,r` was pressed
+    if #M.windows() > 0 then
+      even_out(M.windows())
+    end
+    if vim.api.nvim_win_is_valid(from) then
+      vim.api.nvim_set_current_win(from)
+    end
     vim.notify(
       ("[dotnet-tree] could not start `%s`: %s"):format(cmd, ok and ("job id " .. job) or job),
       vim.log.levels.ERROR

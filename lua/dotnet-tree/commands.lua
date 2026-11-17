@@ -804,6 +804,170 @@ function M.watch(state)
   end)
 end
 
+-- ─── the .NET actions, behind `,` ──────────────────────────────────────────
+--
+-- The .NET actions are mapped as `,b`, `,r`, `,d`... A mapping of two keys
+-- only waits 'timeoutlen' for the second: with a short one, as many
+-- configurations set, a pause after `,` dropped it, and `r` or `d` alone ran
+-- their file operation -- rename, delete -- instead of run or debug. So `,`
+-- is a key of its own: it shows what can follow, waits for that key for as
+-- long as it takes, and runs the action the `,` mapping for it names.
+--
+-- `,` fires at once because neo-tree maps with nowait by default; with nowait
+-- off it fires after 'timeoutlen', and a quick `,r` runs the `,r` mapping
+-- directly. Either way `r` alone never runs. The actions are read from the
+-- `,` mappings of the configuration, so remapped or added ones work and show
+-- up, as long as one key follows `,` (`,x`, `,<C-r>`): with nowait a longer
+-- `,…` sequence could never be reached, so it is reported instead.
+
+local DISABLED = { none = true, nop = true, noop = true }
+
+-- A key as `keytrans` writes it, the form both a mapping and a typed key reach
+local function key_name(keys)
+  return vim.fn.keytrans(vim.api.nvim_replace_termcodes(keys, true, true, true))
+end
+
+local warned_sequences = {}
+
+-- The `,` + one key mappings of the source, as a list of { key, name,
+-- command, config, desc } sorted by key; desc loses its `[.NET]` tag
+local function prefixed_actions(state)
+  local actions = {}
+  for lhs, value in pairs(state.window and state.window.mappings or {}) do
+    local rest = type(lhs) == "string" and lhs:match("^,(.+)$")
+    if rest then
+      local command, desc, config = value, nil, nil
+      if type(value) == "table" then
+        command, desc, config = value[1] or value.command, value.desc, value.config
+      end
+      local name = key_name(rest)
+      if vim.fn.strcharlen(vim.api.nvim_replace_termcodes(rest, true, true, true)) ~= 1 then
+        if not warned_sequences[lhs] then
+          warned_sequences[lhs] = true
+          warn(("`%s` is more than one key after `,`, and only one is read after it: map it to one key"):format(lhs))
+        end
+      elseif command and not (type(command) == "string" and DISABLED[command]) then
+        desc = desc or (type(command) == "string" and command or "")
+        table.insert(actions, {
+          key = rest,
+          name = name,
+          command = command,
+          config = config,
+          desc = (desc:gsub("^%[%.NET%]%s*", "")),
+        })
+      end
+    end
+  end
+  -- Each lower-case key before its upper-case one, the rest alphabetically
+  table.sort(actions, function(a, b)
+    if a.key:lower() ~= b.key:lower() then
+      return a.key:lower() < b.key:lower()
+    end
+    return a.key > b.key
+  end)
+  return actions
+end
+
+-- The actions, one line each, as the float shows them
+local function action_lines(actions)
+  return vim.tbl_map(function(action)
+    return (" %s  %s"):format(action.key, action.desc)
+  end, actions)
+end
+
+-- A float at the bottom-left of the tree window listing the `,` actions; nil,
+-- and the buffer gone, when it cannot be opened
+local function show_actions(state, actions)
+  local lines = action_lines(actions)
+  local width = 0
+  for _, line in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(line) + 1)
+  end
+  local parent = state.winid and vim.api.nvim_win_is_valid(state.winid) and state.winid
+    or vim.api.nvim_get_current_win()
+  width = math.min(width, math.max(vim.api.nvim_win_get_width(parent) - 2, 10))
+  local height = math.min(#lines, math.max(vim.api.nvim_win_get_height(parent) - 2, 1))
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  for i, action in ipairs(actions) do
+    vim.api.nvim_buf_add_highlight(buf, -1, "Special", i - 1, 1, 1 + #action.key)
+  end
+  vim.bo[buf].bufhidden = "wipe"
+  local config = {
+    relative = "win",
+    win = parent,
+    anchor = "SW",
+    row = vim.api.nvim_win_get_height(parent),
+    col = 0,
+    width = width,
+    height = height,
+    style = "minimal",
+    border = "rounded",
+    title = " dotnet-tree ",
+    title_pos = "left",
+    focusable = false,
+    zindex = 250,
+  }
+  -- A footer needs Neovim 0.10
+  if vim.fn.has("nvim-0.10") == 1 then
+    config.footer = " <esc> cancel "
+    config.footer_pos = "right"
+  end
+  local ok, win = pcall(vim.api.nvim_open_win, buf, false, config)
+  if not ok then
+    vim.api.nvim_buf_delete(buf, { force = true })
+    return nil
+  end
+  return win
+end
+
+-- Keys that mean "never mind": <esc>, <C-c>, and a click or a scroll, which
+-- is not a key at all
+local function cancels(key)
+  return key == "" or key == "\27" or key == "\3" or key:sub(1, 1) == "\128"
+end
+
+--- `,`: wait for the key of a .NET action, showing them, then run it.
+function M.dotnet_actions(state)
+  local actions = prefixed_actions(state)
+  if #actions == 0 then
+    warn("no .NET actions are mapped under `,`")
+    return
+  end
+  local win = show_actions(state, actions)
+  if not win then
+    -- No float: the command line says what is awaited, so the next key is not
+    -- taken without notice
+    vim.api.nvim_echo({ { ".NET: ", "ModeMsg" }, { table.concat(action_lines(actions), " ·"), "Normal" } }, false, {})
+  end
+  vim.cmd("redraw")
+  local ok, key = pcall(vim.fn.getcharstr)
+  if win and vim.api.nvim_win_is_valid(win) then
+    vim.api.nvim_win_close(win, true)
+  end
+  if not win then
+    vim.api.nvim_echo({ { "" } }, false, {})
+  end
+  if not ok or cancels(key) then
+    return
+  end
+  local typed = vim.fn.keytrans(key)
+  for _, action in ipairs(actions) do
+    if action.name == typed then
+      local command = action.command
+      local fn = type(command) == "function" and command or (state.commands and state.commands[command]) or M[command]
+      if type(fn) ~= "function" then
+        warn(("`,%s` is mapped to %s, which the .NET tree does not have"):format(action.key, tostring(command)))
+        return
+      end
+      -- What neo-tree gives a command it calls: the mapping's own config
+      state.config = action.config or {}
+      return fn(state)
+    end
+  end
+  warn(("no .NET action on `,%s`; `,` shows them"):format(typed))
+end
+
 -- ─── file operations (#50) ─────────────────────────────────────────────────
 --
 -- Adding, renaming, moving, copying and deleting go through neo-tree's own
@@ -1069,7 +1233,11 @@ local function relocate(state, target, dest, verb, on_done)
         table.concat(edits.servers, ", ")
       )
     end
-    info(("%s %s to %s%s"):format(verb, display(target.path), display(final), by))
+    -- Within one folder the names say it, and a short line needs no Enter
+    local same_dir = vim.fn.fnamemodify(target.path, ":h") == vim.fn.fnamemodify(final, ":h")
+    local from = same_dir and vim.fn.fnamemodify(target.path, ":t") or display(target.path)
+    local to = same_dir and vim.fn.fnamemodify(final, ":t") or display(final)
+    info(("%s %s to %s%s"):format(verb, from, to, by))
     reveal_after(state, final)
     if on_done then
       on_done()

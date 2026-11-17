@@ -430,6 +430,7 @@ describe("file operations from the tree", function()
       { "did", dir .. "/src/Api/Foo.cs", dir .. "/src/Api/Bar.cs" },
     }, lsp_calls)
     assert.is_true(said("2 files edited by roslyn, not saved yet: :wa"))
+    assert.is_true(said("renamed Foo.cs to Bar.cs ("), "names only, within one folder")
   end)
 
   it("refuses a rename over another file, or to a path", function()
@@ -822,6 +823,208 @@ describe("default mappings", function()
     assert.are.same({ "toggle", "vsplit" }, opened)
     package.loaded["neo-tree.sources.common.commands"] = nil
     package.loaded["dotnet-tree.commands"] = nil
+  end)
+
+  -- `,` then a pause then `r`: the pause must not turn it into `r`, rename
+  describe(", and the key after it", function()
+    local commands, ran, keys, messages, real_getcharstr, real_notify
+
+    before_each(function()
+      ran, messages = {}, {}
+      package.loaded["neo-tree.sources.common.commands"] = {}
+      package.loaded["dotnet-tree.commands"] = nil
+      commands = require("dotnet-tree.commands")
+      real_getcharstr, real_notify = vim.fn.getcharstr, vim.notify
+      vim.fn.getcharstr = function()
+        return table.remove(keys, 1)
+      end
+      vim.notify = function(msg)
+        table.insert(messages, msg)
+      end
+    end)
+
+    after_each(function()
+      vim.fn.getcharstr, vim.notify = real_getcharstr, real_notify
+      package.loaded["neo-tree.sources.common.commands"] = nil
+      package.loaded["dotnet-tree.commands"] = nil
+    end)
+
+    local function state(extra)
+      local all = vim.tbl_extend("force", mappings, extra or {})
+      return {
+        winid = vim.api.nvim_get_current_win(),
+        window = { mappings = all },
+        commands = setmetatable({
+          run_project = function()
+            table.insert(ran, "run")
+          end,
+          debug = function()
+            table.insert(ran, "debug")
+          end,
+          rename = function()
+            table.insert(ran, "rename")
+          end,
+        }, { __index = commands }),
+      }
+    end
+
+    it("runs the action of the key that follows, however long it takes", function()
+      local floats, lines
+      keys = { "r" }
+      local getcharstr = vim.fn.getcharstr
+      vim.fn.getcharstr = function()
+        floats = vim.tbl_filter(function(win)
+          return vim.api.nvim_win_get_config(win).relative ~= ""
+        end, vim.api.nvim_list_wins())
+        lines = floats[1] and vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(floats[1]), 0, -1, false)
+        return getcharstr()
+      end
+      commands.dotnet_actions(state())
+      keys = { "d" }
+      vim.fn.getcharstr = getcharstr
+      commands.dotnet_actions(state())
+      assert.are.same({ "run", "debug" }, ran)
+      assert.are.equal(1, #floats, "a float shows the actions while it waits")
+      assert.truthy(vim.tbl_contains(lines, " r  run project"), vim.inspect(lines))
+      assert.are.same(
+        {},
+        vim.tbl_filter(function(win)
+          return vim.api.nvim_win_get_config(win).relative ~= ""
+        end, vim.api.nvim_list_wins()),
+        "and closes after"
+      )
+    end)
+
+    it("does nothing on <esc>, and says when a key has no action", function()
+      keys = { "\27" }
+      commands.dotnet_actions(state())
+      keys = { "q" }
+      commands.dotnet_actions(state())
+      assert.are.same({}, ran)
+      assert.matches("no .NET action on `,q`", messages[1], 1, true)
+    end)
+
+    local function float_lines()
+      local captured
+      local getcharstr = vim.fn.getcharstr
+      vim.fn.getcharstr = function()
+        for _, win in ipairs(vim.api.nvim_list_wins()) do
+          if vim.api.nvim_win_get_config(win).relative ~= "" then
+            captured = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+          end
+        end
+        return getcharstr()
+      end
+      return function()
+        vim.fn.getcharstr = getcharstr
+        return captured
+      end
+    end
+
+    it("lists each lower-case key before its upper-case one, and runs the one pressed", function()
+      local st = state()
+      st.commands.build = function()
+        table.insert(ran, "build")
+      end
+      st.commands.build_solution = function()
+        table.insert(ran, "build solution")
+      end
+      keys = { "B" }
+      local lines = float_lines()
+      commands.dotnet_actions(st)
+      assert.are.same(
+        { " a  add package/reference", " b  build project", " B  build solution", " c  clean project" },
+        vim.list_slice(lines(), 1, 4)
+      )
+      keys = { "b" }
+      commands.dotnet_actions(st)
+      assert.are.same({ "build solution", "build" }, ran)
+    end)
+
+    it("cancels quietly on <C-c>, a click or an interrupt, and closes the float", function()
+      for _, key in ipairs({ "\3", vim.api.nvim_replace_termcodes("<LeftMouse>", true, true, true) }) do
+        keys = { key }
+        commands.dotnet_actions(state())
+      end
+      vim.fn.getcharstr = function()
+        error("Keyboard interrupt")
+      end
+      commands.dotnet_actions(state())
+      assert.are.same({}, ran)
+      assert.are.same({}, messages)
+      assert.are.same(
+        {},
+        vim.tbl_filter(function(win)
+          return vim.api.nvim_win_get_config(win).relative ~= ""
+        end, vim.api.nvim_list_wins())
+      )
+    end)
+
+    it("runs function mappings and a special key, and passes the mapping's config", function()
+      local got = {}
+      local st = state({
+        [",x"] = function(s)
+          table.insert(got, "x:" .. tostring(s == nil))
+        end,
+        [",<C-r>"] = {
+          function(s)
+            table.insert(got, "ctrl-r:" .. vim.inspect(s.config))
+          end,
+          desc = "[.NET] again",
+          config = { show_path = "relative" },
+        },
+      })
+      keys = { "x" }
+      commands.dotnet_actions(st)
+      keys = { "\18" }
+      commands.dotnet_actions(st)
+      assert.are.same({ "x:false", 'ctrl-r:{\n  show_path = "relative"\n}' }, got)
+    end)
+
+    it("leaves out disabled mappings, and reports one too long to reach", function()
+      local lines = float_lines()
+      keys = { "\27" }
+      commands.dotnet_actions(state({ [",r"] = "nop", [",rr"] = "run_project" }))
+      local shown = lines()
+      assert.is_false(vim.tbl_contains(shown, " r  nop"))
+      assert.matches("`,rr` is more than one key after `,`", messages[1], 1, true)
+    end)
+
+    it("says when a mapping names something that is not a command", function()
+      keys = { "x" }
+      commands.dotnet_actions(state({ [",x"] = "no_such_command" }))
+      assert.matches("`,x` is mapped to no_such_command", messages[1], 1, true)
+    end)
+
+    -- Neovim 0.9 has no float footer; any float that cannot open must not
+    -- leave the next key taken without notice
+    it("says what it waits for on the command line when the float cannot open", function()
+      local open_win, echo = vim.api.nvim_open_win, vim.api.nvim_echo
+      local echoed = {}
+      vim.api.nvim_open_win = function()
+        error("Invalid key: 'footer'")
+      end
+      vim.api.nvim_echo = function(chunks)
+        table.insert(echoed, chunks)
+      end
+      local buffers = #vim.api.nvim_list_bufs()
+      keys = { "r" }
+      local ok, err = pcall(commands.dotnet_actions, state())
+      vim.api.nvim_open_win, vim.api.nvim_echo = open_win, echo
+      assert(ok, err)
+      assert.are.same({ "run" }, ran)
+      assert.are.equal(".NET: ", echoed[1][1][1])
+      assert.are.equal(buffers, #vim.api.nvim_list_bufs(), "no buffer left behind")
+    end)
+
+    it("follows the , mappings of the configuration", function()
+      keys = { "x" }
+      commands.dotnet_actions(state({ [",x"] = { "rename", desc = "[.NET] my own" }, [",r"] = "none" }))
+      keys = { "r" }
+      commands.dotnet_actions(state({ [",x"] = { "rename", desc = "[.NET] my own" }, [",r"] = "none" }))
+      assert.are.same({ "rename" }, ran)
+      assert.matches("no .NET action on `,r`", messages[1], 1, true)
+    end)
   end)
 
   it("map only commands the source has", function()

@@ -15,7 +15,9 @@ mappings may land in a minor release; they will always be listed here.
   filesystem source uses, and the .NET actions moved under `,`, which neo-tree
   does not use, so `d` no longer starts a debugger where neo-tree deletes, and
   neo-tree's `s`, `S`, `t` and `w` (open in a split, a tab, a picked window)
-  and `e` (toggle auto-expand width) work again
+  and `e` (toggle auto-expand width) work again. `,` shows the .NET actions in
+  a window and waits for the key, so a pause after it does not run `r`
+  (rename) or `d` (delete) instead
   ([#50](https://github.com/alessandropietrobelli/dotnet-tree.nvim/issues/50)):
 
   | Action | 0.3 | Now |
@@ -33,6 +35,10 @@ mappings may land in a minor release; they will always be listed here.
   reads and Visual Studio writes, is read too: `,d` used to ignore it and start
   without its environment. A file that cannot be read at all is reported
   instead of skipped in silence.
+
+- Run, test and watch terminals open side by side in one strip along the
+  bottom, sharing its width evenly, instead of stacking up until each one is a
+  couple of lines tall.
 
 ### Added
 

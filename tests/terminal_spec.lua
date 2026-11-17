@@ -69,6 +69,85 @@ describe("terminal buffer names", function()
     end, 20))
   end)
 
+  -- Stacked one above the other, a few runs left each a couple of lines
+  it("opens the next terminals beside the first, sharing the bottom strip", function()
+    vim.cmd("only")
+    local first = vim.fn.bufwinid(terminal.open("sleep 5", "run Api"))
+    vim.cmd("stopinsert")
+    local second = vim.fn.bufwinid(terminal.open("sleep 5", "run Worker"))
+    vim.cmd("stopinsert")
+    local third = vim.fn.bufwinid(terminal.open("sleep 5", "run Admin"))
+    vim.cmd("stopinsert")
+    local rows = vim.tbl_map(function(win)
+      return vim.api.nvim_win_get_position(win)[1]
+    end, { first, second, third })
+    assert.are.same({ rows[1], rows[1], rows[1] }, rows, "one row")
+    assert.are.same({ first, second, third }, terminal.windows(), "left to right, in the order opened")
+    local widths = vim.tbl_map(vim.api.nvim_win_get_width, { first, second, third })
+    assert.is_true(math.max(unpack(widths)) - math.min(unpack(widths)) <= 2, vim.inspect(widths))
+    assert.are.equal(15, vim.api.nvim_win_get_height(first))
+  end)
+
+  it("starts the strip again once its last terminal was closed", function()
+    vim.cmd("only")
+    local first = vim.fn.bufwinid(terminal.open("sleep 5", "run Api"))
+    vim.cmd("stopinsert")
+    vim.api.nvim_win_close(first, true)
+    local again = vim.fn.bufwinid(terminal.open("sleep 5", "run Api"))
+    vim.cmd("stopinsert")
+    assert.are.equal(15, vim.api.nvim_win_get_height(again))
+    assert.are.equal(vim.o.columns, vim.api.nvim_win_get_width(again))
+  end)
+
+  it("keeps each tab's strip to itself", function()
+    vim.cmd("only")
+    terminal.open("sleep 5", "run Api")
+    vim.cmd("stopinsert")
+    vim.cmd("tabnew")
+    local other = vim.fn.bufwinid(terminal.open("sleep 5", "run Worker"))
+    vim.cmd("stopinsert")
+    assert.are.same({ other }, terminal.windows())
+    assert.are.equal(vim.o.columns, vim.api.nvim_win_get_width(other))
+    vim.cmd("tabclose")
+  end)
+
+  -- Shown in the editor through :ls!, a terminal is not part of the strip
+  it("leaves a terminal shown in the editor area out of the strip", function()
+    vim.cmd("only")
+    local editor = vim.api.nvim_get_current_win()
+    local buf = terminal.open("sleep 5", "run Api")
+    vim.cmd("stopinsert")
+    local strip = vim.fn.bufwinid(buf)
+    vim.api.nvim_win_set_buf(editor, buf)
+    local editor_width = vim.api.nvim_win_get_width(editor)
+    terminal.open("sleep 5", "run Worker")
+    vim.cmd("stopinsert")
+    assert.are.equal(2, #terminal.windows())
+    assert.are.equal(strip, terminal.windows()[1])
+    assert.are.equal(editor_width, vim.api.nvim_win_get_width(editor), "the editor keeps its width")
+  end)
+
+  it("puts the strip and the cursor back when a command cannot start", function()
+    vim.cmd("only")
+    local editor = vim.api.nvim_get_current_win()
+    local first = vim.fn.bufwinid(terminal.open("sleep 5", "run Api"))
+    vim.cmd("stopinsert")
+    vim.api.nvim_set_current_win(editor)
+    local width = vim.api.nvim_win_get_width(first)
+    local jobstart, termopen, notify = vim.fn.jobstart, vim.fn.termopen, vim.notify
+    vim.fn.jobstart = function()
+      return -1
+    end
+    vim.fn.termopen = vim.fn.jobstart
+    vim.notify = function() end
+    local buf = terminal.open("nope", "run Worker")
+    vim.fn.jobstart, vim.fn.termopen, vim.notify = jobstart, termopen, notify
+    assert.is_nil(buf)
+    assert.are.same({ first }, terminal.windows())
+    assert.are.equal(width, vim.api.nvim_win_get_width(first))
+    assert.are.equal(editor, vim.api.nvim_get_current_win())
+  end)
+
   it("opens nothing for a folder that is gone, and says so", function()
     local messages = {}
     local notify = vim.notify

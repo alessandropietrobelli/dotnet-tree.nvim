@@ -172,8 +172,10 @@ directory contains a solution, and a winbar lets you flip back to files:
 
 Defaults inside the `dotnet-tree` window. `?` shows this list in Neovim. Files and folders use
 neo-tree's own keys, the same as in its filesystem source; the .NET actions are under `,`, which
-neo-tree does not use. neo-tree's other defaults (`s` / `S` / `t` to open in a split or a tab,
-`P` preview, `q` close…) work as everywhere else.
+neo-tree does not use. Press `,` and a window lists them and waits, for as long as you need, for the
+key of the one to run — a pause after `,` never turns `,r` into `r` (rename); `<esc>` cancels.
+neo-tree's other defaults (`s` / `S` / `t` to open in a split or a tab, `P` preview, `q` close…)
+work as everywhere else.
 
 | Key | Action |
 |---|---|
@@ -194,6 +196,7 @@ neo-tree does not use. neo-tree's other defaults (`s` / `S` / `t` to open in a s
 `d`, `y` and `x` also take a selection, as long as it holds only files and folders of projects:
 packages, references, projects and solution items go one at a time.
 | **.NET** | |
+| `,` | list the .NET actions and wait for the key of one |
 | `,s` | select solution (when the repo has more than one) |
 | `,e` | edit the project's `.csproj` |
 | `,a` | add a package or a project reference — with [nuget.nvim](https://github.com/alessandropietrobelli/nuget.nvim) installed, packages open its window |
@@ -219,10 +222,12 @@ To keep the keys of 0.3 and earlier, map them back in your `opts`:
 },
 ```
 
-`,r`, `,t` and `,w` start in the project's folder, not in Neovim's working directory, so an
-ASP.NET Core app finds its `appsettings.json` wherever Neovim was opened. An Azure Functions
-app (its `.csproj` sets `<AzureFunctionsVersion>`, references `Microsoft.NET.Sdk.Functions` or
-`Microsoft.Azure.Functions.Worker.Sdk`, or its folder has a `host.json`) needs
+`,r`, `,t` and `,w` each open a terminal along the bottom; the next ones open beside it, sharing
+the strip's width, so several running apps stay readable. They start in the project's folder, not
+in Neovim's working directory, so an ASP.NET Core app finds its `appsettings.json` wherever Neovim
+was opened. An Azure Functions app (its `.csproj` sets `<AzureFunctionsVersion>`, references
+`Microsoft.NET.Sdk.Functions` or `Microsoft.Azure.Functions.Worker.Sdk`, or its folder has a
+`host.json`) needs
 [Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
 (`func`) on `PATH`: `,r` runs `dotnet run` on `Microsoft.Azure.Functions.Worker.Sdk` 2.x, which
 starts the host itself, and `func start` on an in-process app or Worker SDK 1.x, which `,w` →
