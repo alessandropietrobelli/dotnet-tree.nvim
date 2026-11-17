@@ -10,8 +10,9 @@ build, run, test and watch straight from the tree.
 > welcome.
 
 ![dotnet-tree.nvim rendering the jellyfin solution: packages with the versions
-central package management resolved for them, project references, and
-diagnostics on files that were never opened](assets/demo.gif)
+central package management resolved for them, the .NET actions behind `,`,
+project references, diagnostics on files that were never opened, and a file
+added, renamed and deleted on neo-tree's keys](assets/demo.gif)
 
 <sub>Recorded on a [jellyfin](https://github.com/jellyfin/jellyfin) checkout —
 42 projects, central package management. The demo is a script:
@@ -192,9 +193,6 @@ work as everywhere else.
 | `r` / `b` | rename / rename keeping the extension |
 | `m` / `c` | move / copy to a path |
 | `y` / `x` / `p` | copy / cut / paste |
-
-`d`, `y` and `x` also take a selection, as long as it holds only files and folders of projects:
-packages, references, projects and solution items go one at a time.
 | **.NET** | |
 | `,` | list the .NET actions and wait for the key of one |
 | `,s` | select solution (when the repo has more than one) |
@@ -207,6 +205,9 @@ packages, references, projects and solution items go one at a time.
 | `,t` | test project — in a terminal split |
 | `,w` | watch (run / test / build) — in a terminal split |
 | `,l` | choose the launch profile `,r`, `,d` and `,w` → run use, when the project has several |
+
+`d`, `y` and `x` also take a selection, as long as it holds only files and folders of projects:
+packages, references, projects and solution items go one at a time.
 
 To keep the keys of 0.3 and earlier, map them back in your `opts`:
 

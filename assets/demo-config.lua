@@ -40,8 +40,8 @@ vim.opt.signcolumn = "yes"
 -- the demo jumps with / to reach a line; the highlight afterwards is noise
 vim.opt.hlsearch = false
 -- VHS emits a frame when the screen changes, so a long Sleep over a still
--- screen shortens in the recording -- the 24 s of demo.gif come out of a tape
--- asking for about 40 s. A blinking cursor gives the still frames something to
+-- screen shortens in the recording, so the GIF can come out shorter than the
+-- tape asks for. A blinking cursor gives the still frames something to
 -- differ by. It does not fully close the gap: tune the Sleeps by looking at the
 -- output, not by adding up the tape.
 vim.opt.guicursor = "n-v-c:block-blinkwait200-blinkon450-blinkoff450,i:ver25-blinkwait200-blinkon450-blinkoff450"

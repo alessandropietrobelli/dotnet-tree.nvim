@@ -24,7 +24,7 @@
 
 Output "assets/demo.gif"
 Set Shell "zsh"
-Set FontFamily "Hack Nerd Font Mono"
+Set FontFamily "JetBrainsMono Nerd Font Mono"
 Set FontSize 18
 Set Width 1500
 Set Height 860
@@ -45,7 +45,7 @@ Show
 # --- 1. the solution, as the solution declares it --------------------------
 Sleep 1500ms
 Type " fd"
-Sleep 4s
+Sleep 3s
 
 # --- 2. packages, carrying versions ----------------------------------------
 Type@140ms "jjjjjjjjj"
@@ -57,15 +57,18 @@ Space
 Sleep 1200ms
 Type@160ms "jjj"
 Space
-Sleep 6s
+Sleep 3s
 
 # --- 3. ...versions the csproj never declares ------------------------------
+# `,` lists the .NET actions; `e` opens the project file
+Type ","
+Sleep 2500ms
 Type "e"
 Sleep 2s
 Type "/PackageReference"
 Enter
 Type "zz"
-Sleep 5s
+Sleep 3500ms
 Ctrl+w
 Type "h"
 Sleep 800ms
@@ -82,7 +85,7 @@ Space
 Sleep 1000ms
 Type@160ms "jj"
 Space
-Sleep 6s
+Sleep 3s
 
 # --- 5. diagnostics on files nobody opened ---------------------------------
 Type "gg"
@@ -91,17 +94,38 @@ Sleep 1000ms
 Type@140ms "jjjjjjjjjjj"
 Sleep 500ms
 Space
-Sleep 4s
+Sleep 3s
 Type@140ms "jjjjjjjjjjj"
 Sleep 800ms
 Enter
-Sleep 5s
+Sleep 3500ms
 Ctrl+w
 Type "h"
 Sleep 800ms
 
-# --- 6. the mappings -------------------------------------------------------
+# --- 6. files, on neo-tree's own keys --------------------------------------
+Type "a"
+Sleep 1200ms
+Type@90ms "appsettings.Local.json"
+Sleep 700ms
+Enter
+Sleep 3s
+Type "r"
+Sleep 1s
+Ctrl+u
+Type@90ms "appsettings.Demo.json"
+Sleep 700ms
+Enter
+Sleep 3s
+Type "d"
+Sleep 1500ms
+Type "y"
+Sleep 400ms
+Enter
+Sleep 3s
+
+# --- 7. the mappings -------------------------------------------------------
 Type "?"
-Sleep 6s
+Sleep 3s
 Escape
 Sleep 2s
