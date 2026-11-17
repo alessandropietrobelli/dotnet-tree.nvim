@@ -275,6 +275,19 @@ describe("debug.resolve", function()
     assert.is_truthy(reason:find("`,t`", 1, true), reason)
   end)
 
+  -- #65: a function app runs under the Functions host, not on its own. An
+  -- in-process one is a Library, and saying so would point the wrong way.
+  it("refuses an Azure Functions app, isolated or in-process, pointing to ,r", function()
+    local FUNCTIONS = FIXTURES .. "/functions"
+    for _, app in ipairs({ "Worker2/Worker2.csproj", "InProcess/InProcess.csproj" }) do
+      local target, reason = dbg.resolve(FUNCTIONS .. "/" .. app)
+      assert.is_nil(target, app)
+      assert.is_truthy(reason:find("Azure Functions app", 1, true), reason)
+      assert.is_truthy(reason:find("`,r`", 1, true), reason)
+      assert.is_nil(reason:find("library", 1, true), reason)
+    end
+  end)
+
   it("refuses an OutputType it cannot evaluate rather than assuming Exe", function()
     local target, reason = dbg.resolve(FIXTURES .. "/Unevaluated.csproj")
     assert.is_nil(target)
@@ -718,6 +731,18 @@ describe("debug.debug", function()
     assert.are.equal("dotnet-tree: PlainApp", recorded.runs[1].name)
     assert.is_nil(joined(messages):find("test project", 1, true), joined(messages))
     vim.fn.delete(root, "rf")
+  end)
+
+  it("builds nothing for an Azure Functions app", function()
+    local messages
+    local recorded = with_stubs({}, function()
+      messages = capture_notifications(function()
+        dbg.debug(FIXTURES .. "/functions/Worker2/Worker2.csproj")
+      end)
+    end)
+    assert.is_nil(recorded.built)
+    assert.are.equal(0, #recorded.runs)
+    assert.is_truthy(joined(messages):find("not supported yet", 1, true), joined(messages))
   end)
 
   it("does not hand the debugger a path that is not there", function()
